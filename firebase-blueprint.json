@@ -1,0 +1,299 @@
+{
+  "entities": {
+    "Pluviometro": {
+      "title": "Pluviômetro",
+      "description": "Estação de medição de chuva",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" },
+            "accuracy": { "type": "number" },
+            "altitude": { "type": "number" }
+          },
+          "required": ["lat", "lng"]
+        },
+        "farmId": { "type": "string" }
+      },
+      "required": ["nome", "location", "farmId"]
+    },
+    "ChuvaComunitaria": {
+      "title": "Chuva Comunitária",
+      "description": "Registro de chuva para mapa regional",
+      "type": "object",
+      "properties": {
+        "mm": { "type": "number" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" },
+            "accuracy": { "type": "number" },
+            "altitude": { "type": "number" }
+          },
+          "required": ["lat", "lng"]
+        },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "source": { "type": "string", "enum": ["manual", "sensor"] },
+        "userId": { "type": "string" },
+        "farmId": { "type": "string" },
+        "pluviometroId": { "type": "string" }
+      },
+      "required": ["mm", "location", "timestamp", "createdAt", "userId", "farmId", "pluviometroId"]
+    },
+    "RegistroPessoal": {
+      "title": "Registro Pessoal",
+      "description": "Registro de chuva para dashboard da fazenda",
+      "type": "object",
+      "properties": {
+        "mm": { "type": "number" },
+        "month": { "type": "number" },
+        "year": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "source": { "type": "string", "enum": ["manual", "sensor"] },
+        "userId": { "type": "string" },
+        "farmId": { "type": "string" },
+        "pluviometroId": { "type": "string" }
+      },
+      "required": ["mm", "month", "year", "timestamp", "createdAt", "userId", "farmId", "pluviometroId"]
+    },
+    "Talhao": {
+      "title": "Talhão",
+      "description": "Área de plantio desenhada no mapa",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "farmId": { "type": "string" },
+        "geometria": { "type": "object" },
+        "area": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nome", "farmId", "geometria", "area", "createdAt"]
+    },
+    "ConfigOperacaoProduto": {
+      "title": "Configuração de Operação e Produtos",
+      "description": "Configuração padrão de produtos para um tipo de operação",
+      "type": "object",
+      "properties": {
+        "tipoOperacao": { "type": "string" },
+        "farmId": { "type": "string" },
+        "produtosPadrao": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "produtoId": { "type": "string" },
+              "nome": { "type": "string" },
+              "dose": { "type": "number" },
+              "unidade": { "type": "string" }
+            },
+            "required": ["produtoId", "nome", "dose", "unidade"]
+          }
+        }
+      },
+      "required": ["tipoOperacao", "farmId", "produtosPadrao"]
+    },
+    "ChecklistTemplate": {
+      "title": "Checklist Template",
+      "description": "Template de checklist operacional",
+      "type": "object",
+      "properties": {
+        "farmId": { "type": "string" },
+        "tipoOperacao": { "type": "string" },
+        "nome": { "type": "string" },
+        "itens": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "pergunta": { "type": "string" },
+              "obrigatorio": { "type": "boolean" },
+              "tipo": { "type": "string", "enum": ["boolean", "texto", "numero"] }
+            },
+            "required": ["id", "pergunta", "obrigatorio", "tipo"]
+          }
+        },
+        "ativo": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["farmId", "tipoOperacao", "nome", "itens", "ativo", "createdAt"]
+    },
+    "ChecklistResposta": {
+      "title": "Checklist Resposta",
+      "description": "Resposta de checklist enviada pelo operador",
+      "type": "object",
+      "properties": {
+        "ordemId": { "type": "string" },
+        "execucaoId": { "type": "string" },
+        "operadorId": { "type": "string" },
+        "checklistId": { "type": "string" },
+        "respostas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "itemId": { "type": "string" },
+              "valor": { "type": "any" }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ordemId", "operadorId", "checklistId", "respostas", "createdAt"]
+    },
+    "Fazenda": {
+      "title": "Fazenda",
+      "description": "Propriedade rural",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "producerId": { "type": "string" },
+        "nome": { "type": "string" },
+        "cidade": { "type": "string" },
+        "estado": { "type": "string" },
+        "areaTotal": { "type": "number" },
+        "ativa": { "type": "boolean" },
+        "configurada": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "producerId", "nome", "createdAt"]
+    },
+    "NotificacaoOperacional": {
+      "title": "Notificação Operacional",
+      "description": "Alertas e avisos em tempo real",
+      "type": "object",
+      "properties": {
+        "farmId": { "type": "string" },
+        "tipo": { "type": "string" },
+        "titulo": { "type": "string" },
+        "mensagem": { "type": "string" },
+        "severidade": { "type": "string", "enum": ["info", "warning", "critical"] },
+        "visualizada": { "type": "boolean" },
+        "linkedEntityId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["farmId", "tipo", "titulo", "mensagem", "severidade", "visualizada", "createdAt"]
+    },
+    "Produto": {
+      "title": "Produto",
+      "description": "Item do estoque da fazenda",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "farmId": { "type": "string" },
+        "producerId": { "type": "string" },
+        "nome": { "type": "string" },
+        "categoria": {
+          "type": "string",
+          "enum": ["Semente", "Fertilizante", "Herbicida", "Inseticida", "Fungicida", "Combustivel", "Outros"]
+        },
+        "unidade": {
+          "type": "string",
+          "enum": ["kg", "saca", "litro", "ml", "unidade"]
+        },
+        "estoqueAtual": { "type": "number" },
+        "estoqueMinimo": { "type": "number" },
+        "ativo": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "farmId", "producerId", "nome", "categoria", "unidade", "estoqueAtual", "estoqueMinimo", "ativo", "createdAt", "updatedAt"]
+    },
+    "Equipamento": {
+      "title": "Equipamento",
+      "description": "Mecanização agrícola (máquina ou implemento)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "farmId": { "type": "string" },
+        "nome": { "type": "string" },
+        "tipo": { "type": "string", "enum": ["maquina", "implemento"] },
+        "ativo": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "farmId", "nome", "tipo", "ativo"]
+    },
+    "PecaManutencao": {
+      "title": "Peça de Manutenção",
+      "description": "Peça de reposição ou manutenção vinculada ao estoque e associável a equipamentos e manutenções",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "farmId": { "type": "string" },
+        "nome": { "type": "string" },
+        "codigo": { "type": "string" },
+        "marca": { "type": "string" },
+        "quantidadeMinima": { "type": "number" },
+        "produtoEstoqueId": { "type": "string" },
+        "equipamentosCompativeis": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "manutencoesAssociadas": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "ativo": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "farmId", "nome", "ativo"]
+    }
+  },
+  "firestore": {
+    "fazendas/{farmId}": {
+      "schema": { "$ref": "#/entities/Fazenda" },
+      "description": "Coleção de fazendas"
+    },
+    "notificacoes_operacionais/{notifId}": {
+      "schema": { "$ref": "#/entities/NotificacaoOperacional" },
+      "description": "Coleção de notificações"
+    },
+    "pluviometros/{pluviometroId}": {
+      "schema": { "$ref": "#/entities/Pluviometro" },
+      "description": "Coleção de pluviômetros"
+    },
+    "chuvas_comunitarias/{chuvaId}": {
+      "schema": { "$ref": "#/entities/ChuvaComunitaria" },
+      "description": "Coleção de chuvas comunitárias"
+    },
+    "registros_pessoais/{registroId}": {
+      "schema": { "$ref": "#/entities/RegistroPessoal" },
+      "description": "Coleção de registros pessoais"
+    },
+    "talhoes/{talhaoId}": {
+      "schema": { "$ref": "#/entities/Talhao" },
+      "description": "Coleção de talões"
+    },
+    "config_operacao_produtos/{configId}": {
+      "schema": { "$ref": "#/entities/ConfigOperacaoProduto" },
+      "description": "Coleção de configurações de produtos por operação"
+    },
+    "checklist_templates/{templateId}": {
+      "schema": { "$ref": "#/entities/ChecklistTemplate" },
+      "description": "Coleção de templates de checklist"
+    },
+    "checklist_respostas/{respostaId}": {
+      "schema": { "$ref": "#/entities/ChecklistResposta" },
+      "description": "Coleção de respostas de checklist"
+    },
+    "produtos/{produtoId}": {
+      "schema": { "$ref": "#/entities/Produto" },
+      "description": "Coleção de produtos em estoque"
+    },
+    "equipamentos/{equipamentoId}": {
+      "schema": { "$ref": "#/entities/Equipamento" },
+      "description": "Coleção de máquinas e implementos"
+    },
+    "pecas_manutencao/{pecaId}": {
+      "schema": { "$ref": "#/entities/PecaManutencao" },
+      "description": "Coleção de peças de reposição"
+    }
+  }
+}

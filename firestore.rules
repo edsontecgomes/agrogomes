@@ -1,0 +1,237 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      let userDoc = get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+      return userDoc != null ? userDoc.data : null;
+    }
+
+    function getUserRole() {
+      let data = getUserData();
+      return data != null ? data.role : null;
+    }
+
+    function getUserFarmId() {
+      let data = getUserData();
+      return data != null ? data.farmId : null;
+    }
+
+    function isSystemAdmin() {
+      return getUserRole() == 'system_admin' || getUserRole() == 'admin';
+    }
+
+    function isGerente() {
+      return getUserRole() == 'gerente';
+    }
+
+    function hasFarmAccess(farmId) {
+      let role = getUserRole();
+      let userFarm = getUserFarmId();
+      let farmDoc = get(/databases/$(database)/documents/fazendas/$(farmId));
+      let isProducer = farmDoc != null && farmDoc.data.producerId == request.auth.uid;
+      return role == 'system_admin' || 
+             role == 'admin' || 
+             farmId == userFarm || 
+             isProducer;
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /usuarios/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isSystemAdmin() || isGerente());
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && (
+        (request.auth.uid == userId && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['primaryFarmId', 'farmId', 'nome', 'email', 'updatedAt'])
+        )) || 
+        isSystemAdmin()
+      );
+    }
+
+    match /convites/{conviteId} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isAuthenticated() && isSystemAdmin();
+      allow update: if isAuthenticated() && incoming().diff(existing()).affectedKeys().hasOnly(['used']);
+    }
+
+    match /fazendas/{farmId} {
+      allow read: if isAuthenticated() && (
+        resource.data.producerId == request.auth.uid || 
+        farmId == getUserFarmId() ||
+        isSystemAdmin()
+      );
+      allow create: if isAuthenticated() && incoming().producerId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.producerId == request.auth.uid || 
+        isSystemAdmin()
+      );
+      allow delete: if isAuthenticated() && resource.data.producerId == request.auth.uid;
+    }
+
+    match /notificacoes_operacionais/{notifId} {
+      allow read: if isAuthenticated() && (
+        resource.data.farmId == getUserFarmId() || 
+        (get(/databases/$(database)/documents/fazendas/$(resource.data.farmId)) != null && get(/databases/$(database)/documents/fazendas/$(resource.data.farmId)).data.producerId == request.auth.uid)
+      );
+      allow create: if isAuthenticated(); 
+      allow update: if isAuthenticated() && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['visualizada'])
+      );
+      allow delete: if isAuthenticated() && (
+        get(/databases/$(database)/documents/fazendas/$(resource.data.farmId)) != null && get(/databases/$(database)/documents/fazendas/$(resource.data.farmId)).data.producerId == request.auth.uid
+      );
+    }
+
+    match /ordens_servico/{ordemId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId) && (isSystemAdmin() || isGerente());
+      allow update: if isAuthenticated() && hasFarmAccess(resource.data.farmId) && (
+        isSystemAdmin() || isGerente() ||
+        (incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status == 'em_execucao')
+      );
+      allow delete: if isAuthenticated() && hasFarmAccess(resource.data.farmId) && isSystemAdmin();
+    }
+
+    match /execucoes_servico/{execucaoId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow update: if isAuthenticated() && hasFarmAccess(resource.data.farmId) && (
+        request.auth.uid == resource.data.userId || isSystemAdmin() || isGerente()
+      );
+      allow delete: if isAuthenticated() && hasFarmAccess(resource.data.farmId) && isSystemAdmin();
+    }
+
+    match /segmentos_execucao/{segmentoId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow update, delete: if isAuthenticated() && hasFarmAccess(resource.data.farmId) && (
+        request.auth.uid == resource.data.userId || isSystemAdmin() || isGerente()
+      );
+    }
+
+    match /talhoes/{talhaoId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create, update, delete: if isAuthenticated() && hasFarmAccess(incoming().farmId) && (isSystemAdmin() || isGerente());
+    }
+
+    match /pluviometros/{pluviometroId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create, update, delete: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+    }
+
+    match /chuvas_comunitarias/{chuvaId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    match /registros_pessoais/{registroId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    match /checklist_templates/{templateId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create, update, delete: if isAuthenticated() && hasFarmAccess(incoming().farmId) && (isSystemAdmin() || isGerente());
+    }
+
+    match /horimetros/{horimetroId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow update, delete: if isAuthenticated() && hasFarmAccess(resource.data.farmId) && (isSystemAdmin() || isGerente());
+    }
+
+    match /abastecimentos/{abastecimentoId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow update, delete: if isAuthenticated() && hasFarmAccess(resource.data.farmId) && (isSystemAdmin() || isGerente());
+    }
+
+    match /indicadores_consumo/{indicadorId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create, update: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow delete: if isAuthenticated() && hasFarmAccess(resource.data.farmId) && (isSystemAdmin() || isGerente());
+    }
+
+
+    match /checklist_respostas/{respostaId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+    }
+
+    match /produtos/{produtoId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow update, delete: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+    }
+
+    match /equipamentos/{equipamentoId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow update, delete: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+    }
+
+    match /pecas_manutencao/{pecaId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow update, delete: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+    }
+
+    match /estoque/{produtoId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated() && isSystemAdmin();
+    }
+
+    match /movimentacoes_estoque/{movimentacaoId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow delete: if isAuthenticated() && isSystemAdmin();
+    }
+
+    match /config_operacao_produtos/{configId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create, update, delete: if isAuthenticated() && hasFarmAccess(incoming().farmId) && (isSystemAdmin() || isGerente());
+    }
+
+    match /planos_manutencao/{planoId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow update, delete: if isAuthenticated() && hasFarmAccess(resource.data.farmId) && (isSystemAdmin() || isGerente());
+    }
+
+    match /manutencoes_executadas/{execucaoId} {
+      allow read: if isAuthenticated() && hasFarmAccess(resource.data.farmId);
+      allow create: if isAuthenticated() && hasFarmAccess(incoming().farmId);
+      allow update, delete: if isAuthenticated() && hasFarmAccess(resource.data.farmId) && (isSystemAdmin() || isGerente());
+    }
+  }
+}
+

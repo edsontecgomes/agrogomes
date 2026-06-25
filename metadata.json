@@ -1,0 +1,5 @@
+{
+  "name": "AgroGomes",
+  "description": "Sistema web para gestão agrícola com foco em análise de produtividade e registro de chuvas.",
+  "requestFramePermissions": ["geolocation"]
+}
