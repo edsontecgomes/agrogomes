@@ -3,9 +3,12 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import {
   auth,
   loginWithGoogle,
+  loginWithEmail,
+  criarContaComEmail,
+  recuperarSenha,
   logout,
   db,
-  handleGoogleRedirectResult,
+  isMobileOrPWA,
 } from "./services/firebase";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ChuvaDashboard } from "./modules/chuva/ChuvaDashboard";
@@ -62,37 +65,98 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    let isMounted = true;
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      console.log("AUTH STATE CHANGED:", currentUser?.email || null);
+      setUser(currentUser);
+      setLoadingAuth(false);
+    });
 
-    const startAuth = async () => {
-      try {
-        console.log("INICIANDO AUTENTICAÇÃO");
-        await handleGoogleRedirectResult();
-      } catch (error) {
-        console.error("ERRO AO PROCESSAR REDIRECT:", error);
-        if (isMounted) {
-          setLoginError(JSON.stringify(error, null, 2));
-        }
-      }
-
-      unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-        console.log("AUTH STATE CHANGED:", currentUser?.email || null);
-        if (!isMounted) return;
-        setUser(currentUser);
-        setLoadingAuth(false);
-      });
-    };
-
-    startAuth();
-
-    return () => {
-      isMounted = false;
-      if (unsubscribe) unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
+
+  const getFriendlyError = (error: any) => {
+    const code = error?.code || "";
+
+    if (code === "auth/user-not-found") return "Usuário não encontrado.";
+    if (code === "auth/wrong-password") return "Senha incorreta.";
+    if (code === "auth/invalid-email") return "E-mail inválido.";
+    if (code === "auth/email-already-in-use") return "Este e-mail já está cadastrado.";
+    if (code === "auth/weak-password") return "A senha deve ter pelo menos 6 caracteres.";
+    if (code === "auth/operation-not-allowed") return "Login por e-mail/senha não está habilitado no Firebase.";
+    if (code === "auth/network-request-failed") return "Falha de conexão. Verifique sua internet.";
+
+    return error?.message || "Erro ao fazer login.";
+  };
+
+  const validarCampos = () => {
+    if (!email.trim()) {
+      setLoginError("Informe o e-mail.");
+      return false;
+    }
+
+    if (!senha.trim()) {
+      setLoginError("Informe a senha.");
+      return false;
+    }
+
+    if (senha.length < 6) {
+      setLoginError("A senha deve ter pelo menos 6 caracteres.");
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleEmailLogin = async () => {
+    if (!validarCampos()) return;
+
+    try {
+      setLoginLoading(true);
+      setLoginError(null);
+      await loginWithEmail(email, senha);
+    } catch (error: any) {
+      setLoginError(getFriendlyError(error));
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleCreateAccount = async () => {
+    if (!validarCampos()) return;
+
+    try {
+      setLoginLoading(true);
+      setLoginError(null);
+      await criarContaComEmail(email, senha);
+    } catch (error: any) {
+      setLoginError(getFriendlyError(error));
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!email.trim()) {
+      setLoginError("Informe seu e-mail para recuperar a senha.");
+      return;
+    }
+
+    try {
+      setLoginLoading(true);
+      setLoginError(null);
+      await recuperarSenha(email);
+      setLoginError("Enviamos um link de recuperação para seu e-mail.");
+    } catch (error: any) {
+      setLoginError(getFriendlyError(error));
+    } finally {
+      setLoginLoading(false);
+    }
+  };
 
   if (loadingAuth) {
     return (
@@ -103,42 +167,114 @@ export default function App() {
   }
 
   if (!user) {
+    const mobile = isMobileOrPWA();
+
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-sm border border-slate-100 text-center">
           <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
             <Sprout className="w-8 h-8" />
           </div>
+
           <h1 className="text-2xl font-bold text-slate-900 mb-2">AgroGomes</h1>
-          <p className="text-slate-500 mb-8">
+
+          <p className="text-slate-500 mb-6">
             Gestão agrícola inteligente e análise de produtividade.
           </p>
 
+          <div className="text-left space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                E-mail
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="seuemail@gmail.com"
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Senha
+              </label>
+              <input
+                type="password"
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                placeholder="mínimo 6 caracteres"
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+
           {loginError && (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-left text-xs text-red-700 whitespace-pre-wrap">
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-800">
               {loginError}
             </div>
           )}
 
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              disabled={loginLoading}
+              onClick={handleEmailLogin}
+              className="py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-medium rounded-xl transition-colors"
+            >
+              {loginLoading ? "Aguarde..." : "Entrar"}
+            </button>
+
+            <button
+              type="button"
+              disabled={loginLoading}
+              onClick={handleCreateAccount}
+              className="py-3 px-4 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-800 font-medium rounded-xl transition-colors"
+            >
+              Criar conta
+            </button>
+          </div>
+
           <button
             type="button"
-            onClick={async () => {
-              console.log("BOTÃO LOGIN CLICADO");
-              setLoginError(null);
-
-              try {
-                await loginWithGoogle();
-              } catch (error) {
-                console.error("ERRO NO LOGIN GOOGLE:", error);
-                const message = JSON.stringify(error, null, 2);
-                setLoginError(message);
-                alert(message);
-              }
-            }}
-            className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-xl transition-colors"
+            disabled={loginLoading}
+            onClick={handlePasswordReset}
+            className="mt-4 text-sm font-medium text-emerald-700 hover:text-emerald-800"
           >
-            Entrar com Google
+            Esqueci minha senha
           </button>
+
+          {!mobile && (
+            <>
+              <div className="my-6 flex items-center gap-3">
+                <div className="h-px bg-slate-200 flex-1" />
+                <span className="text-xs text-slate-400">ou continue com</span>
+                <div className="h-px bg-slate-200 flex-1" />
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setLoginError(null);
+                    await loginWithGoogle();
+                  } catch (error: any) {
+                    setLoginError(getFriendlyError(error));
+                  }
+                }}
+                className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-xl transition-colors"
+              >
+                Entrar com Google
+              </button>
+            </>
+          )}
+
+          {mobile && (
+            <p className="mt-6 text-xs text-slate-400">
+              No celular, use e-mail e senha para maior estabilidade.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -146,7 +282,6 @@ export default function App() {
 
   return <MainApp user={user} />;
 }
-
 function MainApp({ user }: { user: User }) {
   const { usuario, loading } = useUsuarioProfile(user.uid);
 

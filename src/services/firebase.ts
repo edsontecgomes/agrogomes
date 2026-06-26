@@ -4,9 +4,12 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
   signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  setPersistence,
+  browserLocalPersistence,
 } from 'firebase/auth';
 
 import {
@@ -32,34 +35,42 @@ enableIndexedDbPersistence(db).catch((err) => {
 
 export const auth = getAuth(app);
 
+setPersistence(auth, browserLocalPersistence)
+  .then(() => console.log('Persistência de autenticação ativada.'))
+  .catch((error) => console.error('Erro ao ativar persistência de autenticação:', error));
+
 export const googleProvider = new GoogleAuthProvider();
 
-export const loginWithGoogle = async () => {
-  const isMobile =
-    /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent);
+export const isMobileOrPWA = () => {
+  const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(
+    navigator.userAgent
+  );
 
   const isStandalone =
     window.matchMedia('(display-mode: standalone)').matches ||
     (window.navigator as any).standalone === true;
 
-  console.log('LOGIN BUTTON CLICKED');
-  console.log('isMobile:', isMobile);
-  console.log('isStandalone:', isStandalone);
-  console.log('authDomain:', auth.app.options.authDomain);
+  return isMobile || isStandalone;
+};
 
-  
+export const loginWithGoogle = async () => {
+  if (isMobileOrPWA()) {
+    throw new Error('No celular, use login por e-mail e senha.');
+  }
+
   return signInWithPopup(auth, googleProvider);
 };
 
-export const handleGoogleRedirectResult = async () => {
-  try {
-    const result = await getRedirectResult(auth);
-    console.log('REDIRECT RESULT:', result?.user?.email || 'sem resultado');
-    return result;
-  } catch (error) {
-    console.error('REDIRECT ERROR:', error);
-    throw error;
-  }
+export const loginWithEmail = async (email: string, senha: string) => {
+  return signInWithEmailAndPassword(auth, email.trim(), senha);
+};
+
+export const criarContaComEmail = async (email: string, senha: string) => {
+  return createUserWithEmailAndPassword(auth, email.trim(), senha);
+};
+
+export const recuperarSenha = async (email: string) => {
+  return sendPasswordResetEmail(auth, email.trim());
 };
 
 export const logout = () => signOut(auth);
