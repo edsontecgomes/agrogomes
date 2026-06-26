@@ -846,44 +846,13 @@ function MainAppContent({ user, usuario }: { user: User; usuario: Usuario }) {
             </button>
           )}
         </div>
-
-        <main className="py-8">
-          {activeModule === "dashboard" && (
-            <OperadorDashboard farmId={currentFarmId || ""} usuario={usuario} />
-          )}
-          {activeModule === "chuvas" && (
-            <>
-              {showOnboardingOnHome && <AgronomicOnboarding />}
-              <ChuvaDashboard farmId={currentFarmId || ""} />
-            </>
-          )}
-          {activeModule === "servicos" && (
-            <ServicosDashboard farmId={currentFarmId || ""} />
-          )}
-          {activeModule === "talhoes" && (
-            <TalhoesDashboard farmId={currentFarmId || ""} />
-          )}
-          {activeModule === "estoque" && (
-            <EstoqueDashboard farmId={currentFarmId || ""} />
-          )}
-          {activeModule === "combustivel" && (
-            <CombustivelDashboard farmId={currentFarmId || ""} />
-          )}
-          {activeModule === "equipamentos" && (
-            <EquipamentosDashboard farmId={currentFarmId || ""} />
-          )}
-          {activeModule === "pecas" && (
-            <PecasManutencaoDashboard farmId={currentFarmId || ""} />
-          )}
-          {activeModule === "usuarios" && isAdmin && (
-            <div className="max-w-7xl mx-auto px-6">
-              <ConvitesList farmId={currentFarmId || ""} />
-            </div>
-          )}
-          {activeModule === "onboarding" && <AgronomicOnboarding />}
-          {activeModule === "integrity" && isAdmin && <FarmIntegrityDebug />}
-        </main>
-
+<ModuleHub
+  activeModule={activeModule}
+  farmId={currentFarmId || ""}
+  usuario={usuario}
+  isAdmin={isAdmin}
+  showOnboardingOnHome={showOnboardingOnHome}
+/>
         <RainFAB farmId={currentFarmId} activeModule={activeModule} />
         <GeofenceSuggester farmId={currentFarmId || ''} />
         <LocationTracker activeExecutions={execucoesAtivas} />
