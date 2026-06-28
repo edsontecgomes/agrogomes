@@ -1,6 +1,8 @@
 import { CicloAgronomico } from "../types/cicloAgronomico";
+import { DecisaoAgronomica } from "../types/decisaoAgronomica";
 import { PlanoManejo } from "../types/planoManejo";
 import { criarCicloAgronomico } from "./cicloAgronomicoService";
+import { criarDecisaoAgronomica } from "./decisaoAgronomicaService";
 import { registrarEventoAgronomico } from "./eventoAgronomicoService";
 import { vincularCicloNaMemoriaAgronomica } from "./memoriaAgronomicaService";
 import { criarPlanoManejo } from "./planoManejoService";
@@ -13,6 +15,16 @@ type CriarCicloSOAInput = Omit<
 type CriarPlanoSOAInput = Omit<
   PlanoManejo,
   "id" | "createdAt" | "updatedAt" | "status"
+>;
+
+type CriarDecisaoSOAInput = Omit<
+  DecisaoAgronomica,
+  | "id"
+  | "createdAt"
+  | "updatedAt"
+  | "status"
+  | "eventosRelacionados"
+  | "resultadosRelacionados"
 >;
 
 export async function criarCicloNoSistemaOperacionalAgronomico(
@@ -36,7 +48,9 @@ export async function criarCicloNoSistemaOperacionalAgronomico(
     tipo: "criacao_ciclo",
     origem: "sistema",
     titulo: "Ciclo Agronômico criado",
-    descricao: `Ciclo da safra ${payload.safra} criado para a cultura ${payload.cultura ?? "não informada"}.`,
+    descricao: `Ciclo da safra ${payload.safra} criado para a cultura ${
+      payload.cultura ?? "não informada"
+    }.`,
     dataEvento: new Date().toISOString(),
     confiabilidade: "alto",
     dados: {
@@ -80,4 +94,37 @@ export async function criarPlanoNoSistemaOperacionalAgronomico(
   });
 
   return planoId;
+}
+
+export async function criarDecisaoNoSistemaOperacionalAgronomico(
+  payload: CriarDecisaoSOAInput
+): Promise<string> {
+  const decisaoId = await criarDecisaoAgronomica(payload);
+
+  await registrarEventoAgronomico({
+    producerId: payload.producerId,
+    farmId: payload.farmId,
+    talhaoId: payload.talhaoId,
+    cicloAgronomicoId: payload.cicloAgronomicoId,
+    memoriaAgronomicaId: payload.memoriaAgronomicaId,
+    planoManejoId: payload.planoManejoId,
+    decisaoAgronomicaId: decisaoId,
+    tipo: "criacao_decisao_agronomica",
+    origem: "sistema",
+    titulo: "Decisão Agronômica criada",
+    descricao: payload.titulo,
+    dataEvento: new Date().toISOString(),
+    confiabilidade: "alto",
+    dados: {
+      tipo: payload.tipo,
+      titulo: payload.titulo,
+      justificativaTecnica: payload.justificativaTecnica,
+      objetivoEsperado: payload.objetivoEsperado ?? "",
+      hipoteseAgronomica: payload.hipoteseAgronomica ?? "",
+      risco: payload.risco ?? "",
+    },
+    createdBy: payload.createdBy,
+  });
+
+  return decisaoId;
 }

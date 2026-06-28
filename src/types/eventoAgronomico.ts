@@ -3,6 +3,8 @@ export type TipoEventoAgronomico =
   | "alteracao_ciclo"
   | "criacao_plano_manejo"
   | "alteracao_plano_manejo"
+  | "criacao_decisao_agronomica"
+  | "alteracao_decisao_agronomica"
   | "plantio"
   | "emergencia"
   | "adubacao"
@@ -42,6 +44,7 @@ export interface EventoAgronomico {
   cicloAgronomicoId: string;
   memoriaAgronomicaId?: string;
   planoManejoId?: string;
+  decisaoAgronomicaId?: string;
   ordemServicoId?: string;
   execucaoId?: string;
 

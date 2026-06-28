@@ -4,3 +4,4 @@ export * from "./planoManejo";
 export * from "./templatePlanoManejo";
 export * from "./eventoAgronomico";
 export * from "./timelineCiclo";
+export * from "./decisaoAgronomica";
