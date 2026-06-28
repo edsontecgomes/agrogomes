@@ -6,4 +6,5 @@ export * from "./eventoAgronomicoService";
 export * from "./timelineCicloService";
 export * from "./decisaoAgronomicaService";
 export * from "./resultadoAgronomicoService";
+export * from "./motorMemoriaAgronomicaService";
 export * from "./soAgronomicoService";
