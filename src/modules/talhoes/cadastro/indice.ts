@@ -3,3 +3,7 @@ export * from "./centroideTalhao";
 export * from "./bordaduraTalhao";
 export * from "./perimetroTalhao";
 export * from "./montarTalhaoCadastro";
+export * from "./talhaoFirestorePayload";
+export * from "./salvarTalhao";
+export * from "./validarSalvarTalhao";
+export * from "./fluxoCriarTalhao";
