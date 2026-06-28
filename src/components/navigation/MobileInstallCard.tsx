@@ -1,8 +1,9 @@
 import { usePWAInstall } from "../../hooks/usePWAInstall";
 
 export function MobileInstallCard() {
-  const { canInstall, installApp } = usePWAInstall();
+  const { canInstall, installApp, isInstalled } = usePWAInstall();
 
+  if (isInstalled) return null;
   if (!canInstall) return null;
 
   return (

@@ -1,4 +1,5 @@
 export * from "./MobileAppShell";
+export * from "./MobileAppStatusBadge";
 export * from "./MobileBottomNav";
 export * from "./MobileHome";
 export * from "./MobileInstallCard";
