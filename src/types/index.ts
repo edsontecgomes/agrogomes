@@ -17,3 +17,4 @@ export * from "./analiseSolo";
 export * from "./chuvaAgronomica";
 export * from "./operacaoAgronomica";
 export * from "./produtividadeAgronomica";
+export * from "./economiaAgronomica";
