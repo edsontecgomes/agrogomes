@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { getEnabledPillars } from "../../app/navigation/pillarsConfig";
 import { AppPillarKey } from "../../types/appPillarNavigation";
 import { MobileAppShell } from "./MobileAppShell";
+import { MobileInstallCard } from "./MobileInstallCard";
 import { MobilePillarCard } from "./MobilePillarCard";
 import { MobilePillarItemList } from "./MobilePillarItemList";
 import { MobileQuickActions } from "./MobileQuickActions";
@@ -35,6 +36,8 @@ export function MobilePillarHome() {
           </p>
         </div>
       </section>
+
+      <MobileInstallCard />
 
       <MobileQuickActions />
 
