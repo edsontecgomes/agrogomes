@@ -4,6 +4,7 @@ export * from "./MobileBottomNav";
 export * from "./MobileHome";
 export * from "./MobileInstallCard";
 export * from "./MobileModuleGrid";
+export * from "./MobileNetworkBanner";
 export * from "./MobilePillarCard";
 export * from "./MobilePillarHome";
 export * from "./MobilePillarItemList";

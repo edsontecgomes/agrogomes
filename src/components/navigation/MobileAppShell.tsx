@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { MobileAppStatusBadge } from "./MobileAppStatusBadge";
 import { MobileBottomNav } from "./MobileBottomNav";
+import { MobileNetworkBanner } from "./MobileNetworkBanner";
 
 interface MobileAppShellProps {
   title: string;
@@ -15,8 +16,8 @@ export function MobileAppShell({
 }: MobileAppShellProps) {
   return (
     <div className="min-h-screen bg-zinc-950 pb-20 text-white">
-      <header className="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/95 px-4 py-3 backdrop-blur">
-        <div className="flex items-start justify-between gap-3">
+      <header className="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
+        <div className="flex items-start justify-between gap-3 px-4 py-3">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-emerald-400">
               Gestão Agro
@@ -35,6 +36,8 @@ export function MobileAppShell({
 
           <MobileAppStatusBadge />
         </div>
+
+        <MobileNetworkBanner />
       </header>
 
       <main>
