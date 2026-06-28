@@ -10,3 +10,5 @@ export * from "./memoriaAgronomicaResumo";
 export * from "./relacaoAgronomica";
 export * from "./aprendizadoAgronomico";
 export * from "./recomendacaoAgronomica";
+export * from "./contextoAgronomico";
+export * from "./explicacaoAgronomica";
