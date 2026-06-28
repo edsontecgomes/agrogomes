@@ -32,9 +32,7 @@ function FarmRequiredPage() {
     <main className="min-h-screen bg-zinc-950 p-4 text-white">
       <p className="text-sm text-emerald-400">Gestão Agro</p>
 
-      <h1 className="mt-1 text-2xl font-bold">
-        Selecione uma fazenda
-      </h1>
+      <h1 className="mt-1 text-2xl font-bold">Selecione uma fazenda</h1>
 
       <p className="mt-2 text-sm text-zinc-400">
         Para acessar este módulo, primeiro selecione uma fazenda ativa.
@@ -44,7 +42,19 @@ function FarmRequiredPage() {
 }
 
 export function AppRoutes() {
-  const { activeFarmId } = useFarm();
+  const farmContext = useFarm() as unknown as {
+    activeFarmId?: string;
+    farmId?: string;
+    selectedFarmId?: string;
+    currentFarmId?: string;
+  };
+
+  const farmId =
+    farmContext.activeFarmId ??
+    farmContext.farmId ??
+    farmContext.selectedFarmId ??
+    farmContext.currentFarmId ??
+    "";
 
   return (
     <Routes>
@@ -63,11 +73,7 @@ export function AppRoutes() {
       <Route
         path="/talhoes"
         element={
-          activeFarmId ? (
-            <TalhoesDashboard farmId={activeFarmId} />
-          ) : (
-            <FarmRequiredPage />
-          )
+          farmId ? <TalhoesDashboard farmId={farmId} /> : <FarmRequiredPage />
         }
       />
 
@@ -94,22 +100,14 @@ export function AppRoutes() {
       <Route
         path="/chuva"
         element={
-          activeFarmId ? (
-            <ChuvaDashboard farmId={activeFarmId} />
-          ) : (
-            <FarmRequiredPage />
-          )
+          farmId ? <ChuvaDashboard farmId={farmId} /> : <FarmRequiredPage />
         }
       />
 
       <Route
         path="/servicos"
         element={
-          activeFarmId ? (
-            <ServicosDashboard farmId={activeFarmId} />
-          ) : (
-            <FarmRequiredPage />
-          )
+          farmId ? <ServicosDashboard farmId={farmId} /> : <FarmRequiredPage />
         }
       />
 
