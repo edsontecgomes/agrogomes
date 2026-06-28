@@ -1,13 +1,13 @@
 import { Routes, Route } from "react-router-dom";
 
+import { useFarm } from "../../contexts/FarmContext";
+
 import { MobileHome } from "../../components/navigation";
 import { ChuvaDashboard } from "../../modules/chuva/ChuvaDashboard";
 import { TalhoesDashboard } from "../../modules/talhoes/TalhoesDashboard";
 import { ServicosDashboard } from "../../modules/servicos/ServicosDashboard";
 import { AgronomiaHub } from "../../modules/agronomia/AgronomiaHub";
 import { FarmIntegrityDebug } from "../../modules/admin/FarmIntegrityDebug";
-
-const TEMP_FARM_ID = "default-farm";
 
 function PlaceholderPage({
   title,
@@ -27,7 +27,25 @@ function PlaceholderPage({
   );
 }
 
+function FarmRequiredPage() {
+  return (
+    <main className="min-h-screen bg-zinc-950 p-4 text-white">
+      <p className="text-sm text-emerald-400">Gestão Agro</p>
+
+      <h1 className="mt-1 text-2xl font-bold">
+        Selecione uma fazenda
+      </h1>
+
+      <p className="mt-2 text-sm text-zinc-400">
+        Para acessar este módulo, primeiro selecione uma fazenda ativa.
+      </p>
+    </main>
+  );
+}
+
 export function AppRoutes() {
+  const { activeFarmId } = useFarm();
+
   return (
     <Routes>
       <Route path="/" element={<MobileHome />} />
@@ -44,7 +62,13 @@ export function AppRoutes() {
 
       <Route
         path="/talhoes"
-        element={<TalhoesDashboard farmId={TEMP_FARM_ID} />}
+        element={
+          activeFarmId ? (
+            <TalhoesDashboard farmId={activeFarmId} />
+          ) : (
+            <FarmRequiredPage />
+          )
+        }
       />
 
       <Route
@@ -69,12 +93,24 @@ export function AppRoutes() {
 
       <Route
         path="/chuva"
-        element={<ChuvaDashboard farmId={TEMP_FARM_ID} />}
+        element={
+          activeFarmId ? (
+            <ChuvaDashboard farmId={activeFarmId} />
+          ) : (
+            <FarmRequiredPage />
+          )
+        }
       />
 
       <Route
         path="/servicos"
-        element={<ServicosDashboard farmId={TEMP_FARM_ID} />}
+        element={
+          activeFarmId ? (
+            <ServicosDashboard farmId={activeFarmId} />
+          ) : (
+            <FarmRequiredPage />
+          )
+        }
       />
 
       <Route path="/agronomia" element={<AgronomiaHub />} />
