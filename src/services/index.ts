@@ -8,4 +8,5 @@ export * from "./decisaoAgronomicaService";
 export * from "./resultadoAgronomicoService";
 export * from "./motorMemoriaAgronomicaService";
 export * from "./relacaoAgronomicaService";
+export * from "./aprendizadoAgronomicoService";
 export * from "./soAgronomicoService";

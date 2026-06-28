@@ -8,3 +8,4 @@ export * from "./decisaoAgronomica";
 export * from "./resultadoAgronomico";
 export * from "./memoriaAgronomicaResumo";
 export * from "./relacaoAgronomica";
+export * from "./aprendizadoAgronomico";
