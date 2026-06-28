@@ -9,3 +9,4 @@ export * from "./resultadoAgronomico";
 export * from "./memoriaAgronomicaResumo";
 export * from "./relacaoAgronomica";
 export * from "./aprendizadoAgronomico";
+export * from "./recomendacaoAgronomica";
