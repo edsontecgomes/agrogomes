@@ -13,3 +13,5 @@ export function AppProviders({
     </>
   );
 }
+
+export default AppProviders;
