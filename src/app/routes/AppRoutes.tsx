@@ -7,6 +7,8 @@ import { ServicosDashboard } from "../../modules/servicos/ServicosDashboard";
 import { AgronomiaHub } from "../../modules/agronomia/AgronomiaHub";
 import { FarmIntegrityDebug } from "../../modules/admin/FarmIntegrityDebug";
 
+const TEMP_FARM_ID = "default-farm";
+
 function PlaceholderPage({
   title,
   subtitle,
@@ -16,19 +18,11 @@ function PlaceholderPage({
 }) {
   return (
     <main className="min-h-screen bg-zinc-950 p-4 text-white">
-      <p className="text-sm text-emerald-400">
-        Gestão Agro
-      </p>
+      <p className="text-sm text-emerald-400">Gestão Agro</p>
 
-      <h1 className="mt-1 text-2xl font-bold">
-        {title}
-      </h1>
+      <h1 className="mt-1 text-2xl font-bold">{title}</h1>
 
-      {subtitle && (
-        <p className="mt-2 text-sm text-zinc-400">
-          {subtitle}
-        </p>
-      )}
+      {subtitle && <p className="mt-2 text-sm text-zinc-400">{subtitle}</p>}
     </main>
   );
 }
@@ -48,7 +42,10 @@ export function AppRoutes() {
         }
       />
 
-      <Route path="/talhoes" element={<TalhoesDashboard />} />
+      <Route
+        path="/talhoes"
+        element={<TalhoesDashboard farmId={TEMP_FARM_ID} />}
+      />
 
       <Route
         path="/ciclo"
@@ -70,9 +67,15 @@ export function AppRoutes() {
         }
       />
 
-      <Route path="/chuva" element={<ChuvaDashboard />} />
+      <Route
+        path="/chuva"
+        element={<ChuvaDashboard farmId={TEMP_FARM_ID} />}
+      />
 
-      <Route path="/servicos" element={<ServicosDashboard />} />
+      <Route
+        path="/servicos"
+        element={<ServicosDashboard farmId={TEMP_FARM_ID} />}
+      />
 
       <Route path="/agronomia" element={<AgronomiaHub />} />
 
