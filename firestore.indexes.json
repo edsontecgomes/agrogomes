@@ -1,0 +1,89 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "talhoes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "nome", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "chuvas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "data", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pluviometros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "nome", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ordens_servico",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "execucoes_servico",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "operadorId", "order": "ASCENDING" },
+        { "fieldPath": "inicio", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "usuarios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "role", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "convites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "movimentos_estoque",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "data", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "caderno_tecnico",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "talhaoId", "order": "ASCENDING" },
+        { "fieldPath": "data", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hectares_inteligentes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "talhaoId", "order": "ASCENDING" },
+        { "fieldPath": "numero", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
