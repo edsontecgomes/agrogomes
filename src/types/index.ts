@@ -1,3 +1,4 @@
+export * from "./base";
 export * from "./cicloAgronomico";
 export * from "./memoriaAgronomica";
 export * from "./planoManejo";
@@ -20,3 +21,4 @@ export * from "./produtividadeAgronomica";
 export * from "./economiaAgronomica";
 export * from "./indiceAgronomico";
 export * from "./appNavigation";
+export * from "./appPillarNavigation";
