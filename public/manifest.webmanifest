@@ -8,6 +8,8 @@
   "orientation": "portrait",
   "theme_color": "#022c22",
   "background_color": "#09090b",
+  "categories": ["business", "productivity", "utilities"],
+  "lang": "pt-BR",
   "icons": [
     {
       "src": "/icons/icon-192.png",
