@@ -13,3 +13,4 @@ export * from "./recomendacaoAgronomica";
 export * from "./contextoAgronomico";
 export * from "./explicacaoAgronomica";
 export * from "./ambienteAgronomico";
+export * from "./analiseSolo";
