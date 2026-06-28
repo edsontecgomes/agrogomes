@@ -5,4 +5,5 @@ export * from "./templatePlanoManejoService";
 export * from "./eventoAgronomicoService";
 export * from "./timelineCicloService";
 export * from "./decisaoAgronomicaService";
+export * from "./resultadoAgronomicoService";
 export * from "./soAgronomicoService";

@@ -1,11 +1,16 @@
 import { CicloAgronomico } from "../types/cicloAgronomico";
 import { DecisaoAgronomica } from "../types/decisaoAgronomica";
 import { PlanoManejo } from "../types/planoManejo";
+import { ResultadoAgronomico } from "../types/resultadoAgronomico";
 import { criarCicloAgronomico } from "./cicloAgronomicoService";
-import { criarDecisaoAgronomica } from "./decisaoAgronomicaService";
+import {
+  criarDecisaoAgronomica,
+  vincularResultadoNaDecisaoAgronomica,
+} from "./decisaoAgronomicaService";
 import { registrarEventoAgronomico } from "./eventoAgronomicoService";
 import { vincularCicloNaMemoriaAgronomica } from "./memoriaAgronomicaService";
 import { criarPlanoManejo } from "./planoManejoService";
+import { registrarResultadoAgronomico } from "./resultadoAgronomicoService";
 
 type CriarCicloSOAInput = Omit<
   CicloAgronomico,
@@ -25,6 +30,11 @@ type CriarDecisaoSOAInput = Omit<
   | "status"
   | "eventosRelacionados"
   | "resultadosRelacionados"
+>;
+
+type CriarResultadoSOAInput = Omit<
+  ResultadoAgronomico,
+  "id" | "createdAt" | "updatedAt"
 >;
 
 export async function criarCicloNoSistemaOperacionalAgronomico(
@@ -127,4 +137,43 @@ export async function criarDecisaoNoSistemaOperacionalAgronomico(
   });
 
   return decisaoId;
+}
+
+export async function registrarResultadoNoSistemaOperacionalAgronomico(
+  payload: CriarResultadoSOAInput
+): Promise<string> {
+  const resultadoId = await registrarResultadoAgronomico(payload);
+
+  if (payload.decisaoAgronomicaId) {
+    await vincularResultadoNaDecisaoAgronomica(
+      payload.decisaoAgronomicaId,
+      resultadoId
+    );
+  }
+
+  await registrarEventoAgronomico({
+    producerId: payload.producerId,
+    farmId: payload.farmId,
+    talhaoId: payload.talhaoId,
+    cicloAgronomicoId: payload.cicloAgronomicoId,
+    memoriaAgronomicaId: payload.memoriaAgronomicaId,
+    planoManejoId: payload.planoManejoId,
+    decisaoAgronomicaId: payload.decisaoAgronomicaId,
+    resultadoAgronomicoId: resultadoId,
+    tipo: "criacao_resultado_agronomico",
+    origem: "sistema",
+    titulo: "Resultado Agronômico registrado",
+    descricao: payload.titulo,
+    dataEvento: payload.dataResultado,
+    confiabilidade: payload.confiabilidade,
+    dados: {
+      tipo: payload.tipo,
+      valor: payload.valor ?? null,
+      unidade: payload.unidade ?? "",
+      descricao: payload.descricao ?? "",
+    },
+    createdBy: payload.createdBy,
+  });
+
+  return resultadoId;
 }
