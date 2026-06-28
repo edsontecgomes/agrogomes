@@ -11,3 +11,4 @@ export * from "./relacaoAgronomicaService";
 export * from "./aprendizadoAgronomicoService";
 export * from "./recomendacaoAgronomicaService";
 export * from "./soAgronomicoService";
+export * from "./contextoAgronomicoService";
