@@ -16,7 +16,7 @@ export function MobileBottomNav() {
           <NavLink
             key={item.path}
             to={item.path}
-            className={({ isActive }) =>
+            className={({ isActive }: { isActive: boolean }) =>
               [
                 "flex flex-col items-center justify-center py-2 text-xs",
                 isActive ? "text-emerald-400" : "text-zinc-400",
