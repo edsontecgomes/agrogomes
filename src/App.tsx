@@ -11,31 +11,20 @@ import {
   isMobileOrPWA,
 } from "./services/firebase";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { ChuvaDashboard } from "./modules/chuva/ChuvaDashboard";
-import { ServicosDashboard } from "./modules/servicos/ServicosDashboard";
-import { ConvitesList } from "./modules/usuarios/ConvitesList";
 import { QRScanner } from "./modules/usuarios/QRScanner";
-import { TalhoesDashboard } from "./modules/talhoes/TalhoesDashboard";
 import { GeolocationTracker } from "./components/GeolocationTracker";
-import { AgronomicOnboarding } from "./components/AgronomicOnboarding";
 import { RainFAB } from "./components/RainFAB";
 import { GeofenceSuggester } from "./components/GeofenceSuggester";
 import { LocationTracker } from "./components/LocationTracker";
 import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
-import { SyncStatus } from "./components/SyncStatus";
 import { useUsuarioProfile } from "./hooks/useUsuarios";
 import { useMinhasExecucoesAtivas } from "./hooks/useServicos";
-import { OperadorDashboard } from "./modules/operador/OperadorDashboard";
 import { FarmSetupWizard } from "./modules/onboarding/FarmSetupWizard";
 import { NotificationToast } from "./modules/operador/NotificationToast";
-import { HealthStatusIndicator } from "./components/HealthStatusIndicator";
-import { FarmIntegrityDebug } from "./modules/admin/FarmIntegrityDebug";
-import { EstoqueDashboard } from "./modules/estoque/EstoqueDashboard";
-import { CombustivelDashboard } from "./modules/combustivel/CombustivelDashboard";
-import { EquipamentosDashboard } from "./modules/equipamentos/EquipamentosDashboard";
-import { PecasManutencaoDashboard } from "./modules/pecas_manutencao/PecasManutencaoDashboard";
 import { FarmProvider, useFarm } from "./contexts/FarmContext";
 import { FarmSelector } from "./components/FarmSelector";
+import { MainLayout } from "./components/layout/MainLayout";
+import { ModuleHub } from "./components/navigation/ModuleHub";
 import {
   Sprout,
   LogOut,
@@ -46,20 +35,30 @@ import {
   Plus,
   Map as MapIcon,
   Info,
-  Activity,
   LayoutDashboard,
-  Bell,
-  Settings,
   ShieldAlert,
-  ShieldCheck,
   Boxes,
   Fuel,
   Wrench,
+  Leaf,
 } from "lucide-react";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { handleFirestoreError } from "./utils/errorHandling";
-import { useFazenda } from "./hooks/useFazenda";
 import { Usuario } from "./types";
+
+type ActiveModule =
+  | "dashboard"
+  | "agronomia"
+  | "chuvas"
+  | "servicos"
+  | "talhoes"
+  | "estoque"
+  | "combustivel"
+  | "equipamentos"
+  | "pecas"
+  | "usuarios"
+  | "onboarding"
+  | "integrity";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -282,6 +281,7 @@ export default function App() {
 
   return <MainApp user={user} />;
 }
+
 function MainApp({ user }: { user: User }) {
   const { usuario, loading } = useUsuarioProfile(user.uid);
 
@@ -341,7 +341,7 @@ function NoProfileScreen({ user }: { user: User }) {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
       {isScanning ? (
         <QRScanner
-          onSuccess={(farmId) => setIsScanning(false)}
+          onSuccess={() => setIsScanning(false)}
           onCancel={() => setIsScanning(false)}
         />
       ) : (
@@ -386,22 +386,43 @@ function NoProfileScreen({ user }: { user: User }) {
   );
 }
 
+function ModuleNavButton({
+  active,
+  onClick,
+  icon,
+  label,
+  danger = false,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+        active
+          ? danger
+            ? "bg-rose-50 text-rose-700"
+            : "bg-emerald-50 text-emerald-700"
+          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
 function MainAppContent({ user, usuario }: { user: User; usuario: Usuario }) {
   const { currentFarmId, activeFarm, loading: loadingFarms } = useFarm();
   const { execucoesAtivas } = useMinhasExecucoesAtivas(currentFarmId);
-  const [activeModule, setActiveModule] = useState<
-    | "chuvas"
-    | "servicos"
-    | "usuarios"
-    | "talhoes"
-    | "onboarding"
-    | "dashboard"
-    | "integrity"
-    | "estoque"
-    | "combustivel"
-    | "equipamentos"
-    | "pecas"
-  >(usuario.role === "operador" ? "dashboard" : "chuvas");
+  const [activeModule, setActiveModule] = useState<ActiveModule>(
+    usuario.role === "operador" ? "dashboard" : "dashboard",
+  );
   const [accessCount, setAccessCount] = useState(0);
   const [showFarmWizard, setShowFarmWizard] = useState(false);
   const [newFarmIdForWizard, setNewFarmIdForWizard] = useState<string | null>(
@@ -449,7 +470,6 @@ function MainAppContent({ user, usuario }: { user: User; usuario: Usuario }) {
   const showOnboardingOnHome = accessCount <= 15;
   const isFarmConfigured = activeFarm?.configurada;
 
-  // Fallback: Se não houver fazenda selecionada e não for admin configurando a primeira
   if (!currentFarmId && !showFarmWizard && usuario.role !== "system_admin") {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
@@ -534,330 +554,75 @@ function MainAppContent({ user, usuario }: { user: User; usuario: Usuario }) {
     );
   }
 
+  const navigationItems: Array<{
+    id: ActiveModule;
+    label: string;
+    icon: React.ReactNode;
+    adminOnly?: boolean;
+    danger?: boolean;
+    hideWhenOnboardingHome?: boolean;
+  }> = [
+    { id: "dashboard", label: "Painel", icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: "agronomia", label: "Agronomia IA", icon: <Leaf className="w-4 h-4" /> },
+    { id: "chuvas", label: "Chuvas", icon: <CloudRain className="w-4 h-4" /> },
+    { id: "servicos", label: "Serviços", icon: <ClipboardList className="w-4 h-4" /> },
+    { id: "talhoes", label: "Talhões", icon: <MapIcon className="w-4 h-4" /> },
+    { id: "estoque", label: "Estoque", icon: <Boxes className="w-4 h-4" /> },
+    { id: "combustivel", label: "Combustível", icon: <Fuel className="w-4 h-4" /> },
+    { id: "equipamentos", label: "Equipamentos", icon: <Wrench className="w-4 h-4" /> },
+    { id: "pecas", label: "Peças", icon: <Wrench className="w-4 h-4" /> },
+    { id: "usuarios", label: "Usuários", icon: <Users className="w-4 h-4" />, adminOnly: true },
+    { id: "onboarding", label: "Como funciona", icon: <Info className="w-4 h-4" />, hideWhenOnboardingHome: true },
+    { id: "integrity", label: "Integridade", icon: <ShieldAlert className="w-4 h-4" />, adminOnly: true, danger: true },
+  ];
+
+  const visibleNavigationItems = navigationItems.filter((item) => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (item.hideWhenOnboardingHome && showOnboardingOnHome) return false;
+    return true;
+  });
+
   return (
     <ErrorBoundary>
-      <GeolocationTracker farmId={currentFarmId || usuario.farmId || ''} />
-      <NotificationToast farmId={currentFarmId || usuario.farmId || ''} />
-      <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-24">
-        <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-          <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2 text-emerald-700 font-bold text-lg">
-                <Sprout className="w-6 h-6" />
-                AgroGomes
-              </div>
+      <GeolocationTracker farmId={currentFarmId || usuario.farmId || ""} />
+      <NotificationToast farmId={currentFarmId || usuario.farmId || ""} />
 
-              <div className="h-6 w-px bg-slate-200 mx-2 hidden sm:block" />
-
-              <div className="flex items-center gap-3">
-                <FarmSelector />
-                {isSystemAdmin && (
-                  <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-wider rounded-full border border-amber-200">
-                    <ShieldCheck className="w-3 h-3" />
-                    System Admin
-                  </span>
-                )}
-              </div>
-
-              <div className="h-6 w-px bg-slate-200 mx-2 hidden lg:block" />
-
-              <nav className="hidden md:flex items-center gap-1">
-                <button
-                  onClick={() => setActiveModule("dashboard")}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeModule === "dashboard"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <LayoutDashboard className="w-4 h-4" />
-                  Painel
-                </button>
-                <button
-                  onClick={() => setActiveModule("chuvas")}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeModule === "chuvas"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <CloudRain className="w-4 h-4" />
-                  Chuvas
-                </button>
-                <button
-                  onClick={() => setActiveModule("servicos")}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeModule === "servicos"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <ClipboardList className="w-4 h-4" />
-                  Serviços
-                </button>
-
-                <button
-                  onClick={() => setActiveModule("talhoes")}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeModule === "talhoes"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <MapIcon className="w-4 h-4" />
-                  Talhões
-                </button>
-                <button
-                  onClick={() => setActiveModule("estoque")}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeModule === "estoque"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <Boxes className="w-4 h-4" />
-                  Estoque
-                </button>
-                <button
-                  onClick={() => setActiveModule("combustivel")}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeModule === "combustivel"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <Fuel className="w-4 h-4" />
-                  Combustível
-                </button>
-                <button
-                  onClick={() => setActiveModule("equipamentos")}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeModule === "equipamentos"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <Wrench className="w-4 h-4" />
-                  Equipamentos
-                </button>
-                <button
-                  onClick={() => setActiveModule("pecas")}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeModule === "pecas"
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <Wrench className="w-4 h-4" />
-                  Peças
-                </button>
-                {isAdmin && (
-                  <button
-                    onClick={() => setActiveModule("usuarios")}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeModule === "usuarios"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                  >
-                    <Users className="w-4 h-4" />
-                    Usuários
-                  </button>
-                )}
-                {!showOnboardingOnHome && (
-                  <button
-                    onClick={() => setActiveModule("onboarding")}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeModule === "onboarding"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                  >
-                    <Info className="w-4 h-4" />
-                    Como funciona
-                  </button>
-                )}
-                {isAdmin && (
-                  <button
-                    onClick={() => setActiveModule("integrity")}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeModule === "integrity"
-                        ? "bg-rose-50 text-rose-700"
-                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                  >
-                    <ShieldAlert className="w-4 h-4" />
-                    Integridade
-                  </button>
-                )}
-              </nav>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div className="hidden sm:flex items-center gap-3">
-                <HealthStatusIndicator farmId={currentFarmId} />
-                <SyncStatus />
-              </div>
-              <div className="flex items-center gap-2">
-                <img
-                  src={
-                    user.photoURL ||
-                    `https://ui-avatars.com/api/?name=${user.email}`
-                  }
-                  alt="Avatar"
-                  className="w-8 h-8 rounded-full border border-slate-200"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="hidden sm:block">
-                  <span className="text-sm font-medium text-slate-700 block leading-tight">
-                    {user.displayName || user.email}
-                  </span>
-                  <span className="text-xs text-slate-500 capitalize">
-                    {usuario.role}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={logout}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                title="Sair"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            </div>
+      <MainLayout
+        user={user}
+        usuario={usuario}
+        currentFarmId={currentFarmId}
+        isSystemAdmin={isSystemAdmin}
+        onLogout={logout}
+      >
+        <div className="bg-white border-b border-slate-200">
+          <div className="max-w-7xl mx-auto px-6 py-2 flex gap-2 overflow-x-auto">
+            {visibleNavigationItems.map((item) => (
+              <ModuleNavButton
+                key={item.id}
+                active={activeModule === item.id}
+                onClick={() => setActiveModule(item.id)}
+                icon={item.icon}
+                label={item.label}
+                danger={item.danger}
+              />
+            ))}
           </div>
-        </header>
-
-        {/* Mobile Navigation */}
-        <div className="md:hidden bg-white border-b border-slate-200 flex p-2 gap-2 overflow-x-auto">
-          <button
-            onClick={() => setActiveModule("dashboard")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-              activeModule === "dashboard"
-                ? "bg-emerald-50 text-emerald-700"
-                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4" />
-            Painel
-          </button>
-          <button
-            onClick={() => setActiveModule("chuvas")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-              activeModule === "chuvas"
-                ? "bg-emerald-50 text-emerald-700"
-                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-            }`}
-          >
-            <CloudRain className="w-4 h-4" />
-            Chuvas
-          </button>
-          <button
-            onClick={() => setActiveModule("servicos")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-              activeModule === "servicos"
-                ? "bg-emerald-50 text-emerald-700"
-                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-            }`}
-          >
-            <ClipboardList className="w-4 h-4" />
-            Serviços
-          </button>
-
-          <button
-            onClick={() => setActiveModule("talhoes")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-              activeModule === "talhoes"
-                ? "bg-emerald-50 text-emerald-700"
-                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-            }`}
-          >
-            <MapIcon className="w-4 h-4" />
-            Talhões
-          </button>
-          <button
-            onClick={() => setActiveModule("estoque")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-              activeModule === "estoque"
-                ? "bg-emerald-50 text-emerald-700"
-                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-            }`}
-          >
-            <Boxes className="w-4 h-4" />
-            Estoque
-          </button>
-          <button
-            onClick={() => setActiveModule("combustivel")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-              activeModule === "combustivel"
-                ? "bg-emerald-50 text-emerald-700"
-                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-            }`}
-          >
-            <Fuel className="w-4 h-4" />
-            Combustível
-          </button>
-          <button
-            onClick={() => setActiveModule("equipamentos")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-              activeModule === "equipamentos"
-                ? "bg-emerald-50 text-emerald-700"
-                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-            }`}
-          >
-            <Wrench className="w-4 h-4" />
-            Equipamentos
-          </button>
-          <button
-            onClick={() => setActiveModule("pecas")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-              activeModule === "pecas"
-                ? "bg-emerald-50 text-emerald-700"
-                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-            }`}
-          >
-            <Wrench className="w-4 h-4" />
-            Peças
-          </button>
-          {isAdmin && (
-            <button
-              onClick={() => setActiveModule("usuarios")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                activeModule === "usuarios"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              Usuários
-            </button>
-          )}
-          {!showOnboardingOnHome && (
-            <button
-              onClick={() => setActiveModule("onboarding")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                activeModule === "onboarding"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <Info className="w-4 h-4" />
-              Como funciona
-            </button>
-          )}
         </div>
-<ModuleHub
-  activeModule={activeModule}
-  farmId={currentFarmId || ""}
-  usuario={usuario}
-  isAdmin={isAdmin}
-  showOnboardingOnHome={showOnboardingOnHome}
-/>
+
+        <ModuleHub
+          activeModule={activeModule}
+          farmId={currentFarmId || ""}
+          usuario={usuario}
+          isAdmin={isAdmin}
+          showOnboardingOnHome={showOnboardingOnHome}
+          onOpenModule={setActiveModule}
+        />
+
         <RainFAB farmId={currentFarmId} activeModule={activeModule} />
-        <GeofenceSuggester farmId={currentFarmId || ''} />
+        <GeofenceSuggester farmId={currentFarmId || ""} />
         <LocationTracker activeExecutions={execucoesAtivas} />
         <PWAInstallPrompt />
-      </div>
+      </MainLayout>
     </ErrorBoundary>
   );
 }

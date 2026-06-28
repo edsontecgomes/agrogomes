@@ -2,35 +2,51 @@ import React, { Suspense, lazy } from "react";
 import { Usuario } from "../../types";
 
 const AgronomiaHub = lazy(() =>
-  import("../../modules/agronomia/AgronomiaHub").then((m) => ({ default: m.AgronomiaHub }))
+  import("../../modules/agronomia/AgronomiaHub").then((m) => ({
+    default: m.AgronomiaHub,
+  }))
 );
 
 const ChuvaDashboard = lazy(() =>
-  import("../../modules/chuva/ChuvaDashboard").then((m) => ({ default: m.ChuvaDashboard }))
+  import("../../modules/chuva/ChuvaDashboard").then((m) => ({
+    default: m.ChuvaDashboard,
+  }))
 );
 
 const ServicosDashboard = lazy(() =>
-  import("../../modules/servicos/ServicosDashboard").then((m) => ({ default: m.ServicosDashboard }))
+  import("../../modules/servicos/ServicosDashboard").then((m) => ({
+    default: m.ServicosDashboard,
+  }))
 );
 
 const TalhoesDashboard = lazy(() =>
-  import("../../modules/talhoes/TalhoesDashboard").then((m) => ({ default: m.TalhoesDashboard }))
+  import("../../modules/talhoes/TalhoesDashboard").then((m) => ({
+    default: m.TalhoesDashboard,
+  }))
 );
 
 const OperadorDashboard = lazy(() =>
-  import("../../modules/operador/OperadorDashboard").then((m) => ({ default: m.OperadorDashboard }))
+  import("../../modules/operador/OperadorDashboard").then((m) => ({
+    default: m.OperadorDashboard,
+  }))
 );
 
 const EstoqueDashboard = lazy(() =>
-  import("../../modules/estoque/EstoqueDashboard").then((m) => ({ default: m.EstoqueDashboard }))
+  import("../../modules/estoque/EstoqueDashboard").then((m) => ({
+    default: m.EstoqueDashboard,
+  }))
 );
 
 const CombustivelDashboard = lazy(() =>
-  import("../../modules/combustivel/CombustivelDashboard").then((m) => ({ default: m.CombustivelDashboard }))
+  import("../../modules/combustivel/CombustivelDashboard").then((m) => ({
+    default: m.CombustivelDashboard,
+  }))
 );
 
 const EquipamentosDashboard = lazy(() =>
-  import("../../modules/equipamentos/EquipamentosDashboard").then((m) => ({ default: m.EquipamentosDashboard }))
+  import("../../modules/equipamentos/EquipamentosDashboard").then((m) => ({
+    default: m.EquipamentosDashboard,
+  }))
 );
 
 const PecasManutencaoDashboard = lazy(() =>
@@ -40,15 +56,21 @@ const PecasManutencaoDashboard = lazy(() =>
 );
 
 const ConvitesList = lazy(() =>
-  import("../../modules/usuarios/ConvitesList").then((m) => ({ default: m.ConvitesList }))
+  import("../../modules/usuarios/ConvitesList").then((m) => ({
+    default: m.ConvitesList,
+  }))
 );
 
 const FarmIntegrityDebug = lazy(() =>
-  import("../../modules/admin/FarmIntegrityDebug").then((m) => ({ default: m.FarmIntegrityDebug }))
+  import("../../modules/admin/FarmIntegrityDebug").then((m) => ({
+    default: m.FarmIntegrityDebug,
+  }))
 );
 
 const AgronomicOnboarding = lazy(() =>
-  import("../AgronomicOnboarding").then((m) => ({ default: m.AgronomicOnboarding }))
+  import("../AgronomicOnboarding").then((m) => ({
+    default: m.AgronomicOnboarding,
+  }))
 );
 
 type ModuleHubProps = {
@@ -57,7 +79,7 @@ type ModuleHubProps = {
   usuario: Usuario;
   isAdmin: boolean;
   showOnboardingOnHome: boolean;
-  onOpenModule: (moduleId: string) => void;
+  onOpenModule?: (moduleId: string) => void;
 };
 
 function LoadingModule() {
@@ -77,7 +99,7 @@ export function ModuleHub({
   usuario,
   isAdmin,
   showOnboardingOnHome,
-  onOpenModule,
+  onOpenModule = () => {},
 }: ModuleHubProps) {
   return (
     <Suspense fallback={<LoadingModule />}>
