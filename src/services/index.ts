@@ -16,4 +16,5 @@ export * from "./ambienteAgronomicoService";
 export * from "./soloService";
 export * from "./chuvaAgronomicaService";
 export * from "./operacaoAgronomicaService";
+export * from "./produtividadeAgronomicaService";
 export * from "./soAgronomicoService";
