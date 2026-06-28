@@ -137,8 +137,13 @@ export function FarmProvider({
                 ? usuario.primaryFarmId
                 : docs[0].id;
 
-          setFarmIdInternal(defaultId);
-          localStorage.setItem("currentFarmId", defaultId);
+         if (defaultId) {
+  setFarmIdInternal(defaultId);
+  localStorage.setItem("currentFarmId", defaultId);
+} else {
+  setFarmIdInternal(null);
+  localStorage.removeItem("currentFarmId");
+}
         } else {
           setFarmIdInternal(null);
           localStorage.removeItem("currentFarmId");

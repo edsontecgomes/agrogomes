@@ -16,15 +16,9 @@ import {
 
 import { logout } from "../services/firebase";
 import { ErrorBoundary } from "../components/ErrorBoundary";
-import { GeolocationTracker } from "../components/GeolocationTracker";
-import { RainFAB } from "../components/RainFAB";
-import { GeofenceSuggester } from "../components/GeofenceSuggester";
-import { LocationTracker } from "../components/LocationTracker";
 import { PWAInstallPrompt } from "../components/PWAInstallPrompt";
-import { NotificationToast } from "../modules/operador/NotificationToast";
 import { FarmProvider, useFarm } from "../contexts/FarmContext";
 import { useUsuarioProfile } from "../hooks/useUsuarios";
-import { useMinhasExecucoesAtivas } from "../hooks/useServicos";
 import { FarmSetupWizard } from "../modules/onboarding/FarmSetupWizard";
 import { ModuleHub } from "../components/navigation/ModuleHub";
 import { MainLayout } from "../components/layout/MainLayout";
@@ -103,7 +97,6 @@ export function MainApp({ user }: MainAppProps) {
 
 function MainAppContent({ user, usuario }: { user: User; usuario: Usuario }) {
   const { currentFarmId, activeFarm, loading: loadingFarms } = useFarm();
-  const { execucoesAtivas } = useMinhasExecucoesAtivas(currentFarmId);
   const [activeModule, setActiveModule] = useState<ActiveModule>("dashboard");
   const [accessCount, setAccessCount] = useState(0);
   const [showFarmWizard, setShowFarmWizard] = useState(false);
@@ -161,14 +154,18 @@ function MainAppContent({ user, usuario }: { user: User; usuario: Usuario }) {
         <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mb-6">
           <ShieldAlert className="w-8 h-8" />
         </div>
+
         <h2 className="text-xl font-bold text-slate-900 mb-2">
           Nenhuma Fazenda Ativa
         </h2>
+
         <p className="text-slate-500 max-w-xs mb-8">
           Não conseguimos localizar sua fazenda. Por favor, entre em contato com
           seu administrador.
         </p>
+
         <button
+          type="button"
           onClick={logout}
           className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl transition-all active:scale-95"
         >
@@ -206,18 +203,70 @@ function MainAppContent({ user, usuario }: { user: User; usuario: Usuario }) {
     danger?: boolean;
     hideWhenOnboardingHome?: boolean;
   }> = [
-    { id: "dashboard", label: "Painel", icon: <LayoutDashboard className="w-4 h-4" /> },
-    { id: "agronomia", label: "Agronomia IA", icon: <Leaf className="w-4 h-4" /> },
-    { id: "chuvas", label: "Chuvas", icon: <CloudRain className="w-4 h-4" /> },
-    { id: "servicos", label: "Serviços", icon: <ClipboardList className="w-4 h-4" /> },
-    { id: "talhoes", label: "Talhões", icon: <MapIcon className="w-4 h-4" /> },
-    { id: "estoque", label: "Estoque", icon: <Boxes className="w-4 h-4" /> },
-    { id: "combustivel", label: "Combustível", icon: <Fuel className="w-4 h-4" /> },
-    { id: "equipamentos", label: "Equipamentos", icon: <Wrench className="w-4 h-4" /> },
-    { id: "pecas", label: "Peças", icon: <Wrench className="w-4 h-4" /> },
-    { id: "usuarios", label: "Usuários", icon: <Users className="w-4 h-4" />, adminOnly: true },
-    { id: "onboarding", label: "Como funciona", icon: <Info className="w-4 h-4" />, hideWhenOnboardingHome: true },
-    { id: "integrity", label: "Integridade", icon: <ShieldAlert className="w-4 h-4" />, adminOnly: true, danger: true },
+    {
+      id: "dashboard",
+      label: "Painel",
+      icon: <LayoutDashboard className="w-4 h-4" />,
+    },
+    {
+      id: "agronomia",
+      label: "Agronomia IA",
+      icon: <Leaf className="w-4 h-4" />,
+    },
+    {
+      id: "chuvas",
+      label: "Chuvas",
+      icon: <CloudRain className="w-4 h-4" />,
+    },
+    {
+      id: "servicos",
+      label: "Serviços",
+      icon: <ClipboardList className="w-4 h-4" />,
+    },
+    {
+      id: "talhoes",
+      label: "Talhões",
+      icon: <MapIcon className="w-4 h-4" />,
+    },
+    {
+      id: "estoque",
+      label: "Estoque",
+      icon: <Boxes className="w-4 h-4" />,
+    },
+    {
+      id: "combustivel",
+      label: "Combustível",
+      icon: <Fuel className="w-4 h-4" />,
+    },
+    {
+      id: "equipamentos",
+      label: "Equipamentos",
+      icon: <Wrench className="w-4 h-4" />,
+    },
+    {
+      id: "pecas",
+      label: "Peças",
+      icon: <Wrench className="w-4 h-4" />,
+    },
+    {
+      id: "usuarios",
+      label: "Usuários",
+      icon: <Users className="w-4 h-4" />,
+      adminOnly: true,
+    },
+    {
+      id: "onboarding",
+      label: "Como funciona",
+      icon: <Info className="w-4 h-4" />,
+      hideWhenOnboardingHome: true,
+    },
+    {
+      id: "integrity",
+      label: "Integridade",
+      icon: <ShieldAlert className="w-4 h-4" />,
+      adminOnly: true,
+      danger: true,
+    },
   ];
 
   const visibleNavigationItems = navigationItems.filter((item) => {
@@ -228,9 +277,6 @@ function MainAppContent({ user, usuario }: { user: User; usuario: Usuario }) {
 
   return (
     <ErrorBoundary>
-      <GeolocationTracker farmId={currentFarmId || usuario.farmId || ""} />
-      <NotificationToast farmId={currentFarmId || usuario.farmId || ""} />
-
       <MainLayout
         user={user}
         usuario={usuario}
@@ -262,9 +308,6 @@ function MainAppContent({ user, usuario }: { user: User; usuario: Usuario }) {
           onOpenModule={(moduleId) => setActiveModule(moduleId as ActiveModule)}
         />
 
-        <RainFAB farmId={currentFarmId} activeModule={activeModule} />
-        <GeofenceSuggester farmId={currentFarmId || ""} />
-        <LocationTracker activeExecutions={execucoesAtivas} />
         <PWAInstallPrompt />
       </MainLayout>
     </ErrorBoundary>
