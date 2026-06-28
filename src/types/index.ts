@@ -18,3 +18,5 @@ export * from "./chuvaAgronomica";
 export * from "./operacaoAgronomica";
 export * from "./produtividadeAgronomica";
 export * from "./economiaAgronomica";
+export * from "./indiceAgronomico";
+export * from "./appNavigation";
