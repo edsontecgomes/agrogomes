@@ -1,6 +1,12 @@
 import React, { Suspense, lazy } from "react";
 import { Usuario } from "../../types";
 
+const HectaMapHome = lazy(() =>
+  import("../../features/map/components/HectaMapHome").then((m) => ({
+    default: m.default,
+  })),
+);
+
 const AgronomiaHub = lazy(() =>
   import("../../modules/agronomia/AgronomiaHub").then((m) => ({
     default: m.AgronomiaHub,
@@ -89,60 +95,6 @@ function LoadingModule() {
   );
 }
 
-function DashboardSeguro({ onOpenModule }: { onOpenModule: (moduleId: string) => void }) {
-  return (
-    <main className="py-8">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <h1 className="text-2xl font-bold text-slate-900">
-            Painel AgroGomes
-          </h1>
-
-          <p className="mt-2 text-slate-500">
-            Modo seguro de estabilização ativo. Use os atalhos abaixo para
-            testar os módulos principais sem carregar consultas automáticas.
-          </p>
-
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <button
-              type="button"
-              onClick={() => onOpenModule("talhoes")}
-              className="p-5 rounded-2xl border border-slate-200 text-left hover:border-emerald-300 hover:bg-emerald-50 transition-colors"
-            >
-              <h2 className="font-bold text-slate-900">Talhões</h2>
-              <p className="text-sm text-slate-500 mt-1">
-                Cadastrar e testar cercas virtuais.
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onOpenModule("chuvas")}
-              className="p-5 rounded-2xl border border-slate-200 text-left hover:border-emerald-300 hover:bg-emerald-50 transition-colors"
-            >
-              <h2 className="font-bold text-slate-900">Chuvas</h2>
-              <p className="text-sm text-slate-500 mt-1">
-                Testar registro pluviométrico.
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onOpenModule("servicos")}
-              className="p-5 rounded-2xl border border-slate-200 text-left hover:border-emerald-300 hover:bg-emerald-50 transition-colors"
-            >
-              <h2 className="font-bold text-slate-900">Serviços</h2>
-              <p className="text-sm text-slate-500 mt-1">
-                Validar ordens de serviço depois.
-              </p>
-            </button>
-          </div>
-        </div>
-      </div>
-    </main>
-  );
-}
-
 export function ModuleHub({
   activeModule,
   farmId,
@@ -153,9 +105,7 @@ export function ModuleHub({
 }: ModuleHubProps) {
   return (
     <Suspense fallback={<LoadingModule />}>
-      {activeModule === "dashboard" && (
-        <DashboardSeguro onOpenModule={onOpenModule} />
-      )}
+      {activeModule === "dashboard" && <HectaMapHome />}
 
       {activeModule === "agronomia" && (
         <main className="py-8">
