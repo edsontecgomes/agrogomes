@@ -10,5 +10,6 @@ export * from "./MobilePillarHome";
 export * from "./MobilePillarItemList";
 export * from "./MobileQuickActions";
 export * from "./MobileSectionCard";
+export * from "./MobileSyncStatus";
 export * from "./ModuleHub";
 export * from "./SectionGrid";

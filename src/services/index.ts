@@ -18,4 +18,7 @@ export * from "./chuvaAgronomicaService";
 export * from "./operacaoAgronomicaService";
 export * from "./produtividadeAgronomicaService";
 export * from "./economiaAgronomicaService";
+export * from "./indiceAgronomicoService";
+export * from "./offlineSyncQueue";
+export * from "./offlineSyncService";
 export * from "./soAgronomicoService";

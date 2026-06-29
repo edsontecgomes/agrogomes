@@ -22,3 +22,4 @@ export * from "./economiaAgronomica";
 export * from "./indiceAgronomico";
 export * from "./appNavigation";
 export * from "./appPillarNavigation";
+export * from "./offlineSync";

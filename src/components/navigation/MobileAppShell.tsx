@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { MobileAppStatusBadge } from "./MobileAppStatusBadge";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { MobileNetworkBanner } from "./MobileNetworkBanner";
+import { MobileSyncStatus } from "./MobileSyncStatus";
 
 interface MobileAppShellProps {
   title: string;
@@ -23,14 +24,10 @@ export function MobileAppShell({
               Gestão Agro
             </p>
 
-            <h1 className="text-lg font-bold">
-              {title}
-            </h1>
+            <h1 className="text-lg font-bold">{title}</h1>
 
             {subtitle && (
-              <p className="mt-1 text-xs text-zinc-400">
-                {subtitle}
-              </p>
+              <p className="mt-1 text-xs text-zinc-400">{subtitle}</p>
             )}
           </div>
 
@@ -38,11 +35,10 @@ export function MobileAppShell({
         </div>
 
         <MobileNetworkBanner />
+        <MobileSyncStatus />
       </header>
 
-      <main>
-        {children}
-      </main>
+      <main>{children}</main>
 
       <MobileBottomNav />
     </div>
