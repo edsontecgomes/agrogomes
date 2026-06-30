@@ -105,7 +105,7 @@ export function ModuleHub({
 }: ModuleHubProps) {
   return (
     <Suspense fallback={<LoadingModule />}>
-      {activeModule === "dashboard" && <HectaMapHome />}
+      {activeModule === "dashboard" && <HectaMapHome farmId={farmId} />}
 
       {activeModule === "agronomia" && (
         <main className="py-8">

@@ -24,3 +24,4 @@ export * from "./appNavigation";
 export * from "./appPillarNavigation";
 export * from "./offlineSync";
 export * from "./talhaoDrawing";
+export * from "./hectaVisual";
