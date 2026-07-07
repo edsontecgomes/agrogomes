@@ -12,6 +12,10 @@ export function gerarCodigoUei(talhaoId: string, numero: number) {
   return `${talhaoId}-UEI-${sequencia}`;
 }
 
+export function gerarIdGDA(ueiId: string) {
+  return `GDA-${ueiId}`;
+}
+
 export function descreverFaseUei() {
   return "Nesta fase, o AgroGomes irá priorizar chuvas e ordens de serviço para formar o histórico de manejo por hectare.";
 }
