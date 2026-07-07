@@ -1,4 +1,16 @@
+import { CoordenadaGeografica } from "../geometria";
+
 export type UeiStatus = "planejada" | "ativa" | "arquivada";
+
+export type UeiOrigem =
+  | "manual"
+  | "grid_1ha"
+  | "grid_geografico"
+  | "produtividade"
+  | "solo"
+  | "altitude"
+  | "drone"
+  | "ia";
 
 export type Uei = {
   id: string;
@@ -8,6 +20,12 @@ export type Uei = {
   nome?: string;
   areaHa: number;
   status: UeiStatus;
+
+  origem?: UeiOrigem;
+  numero?: number;
+  centroide?: CoordenadaGeografica;
+  geometria?: CoordenadaGeografica[];
+
   createdAt?: unknown;
   updatedAt?: unknown;
 };
