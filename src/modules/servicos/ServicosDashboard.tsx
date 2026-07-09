@@ -36,6 +36,7 @@ export function ServicosDashboard({ farmId }: ServicosDashboardProps) {
   if (!usuario) return null;
 
   const canManage = usuario.role === 'admin' || usuario.role === 'gerente';
+  const userRole = usuario.role ?? "operador";
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -122,7 +123,7 @@ export function ServicosDashboard({ farmId }: ServicosDashboardProps) {
         <OrdensList 
           ordens={ordens} 
           farmId={farmId} 
-          userRole={usuario.role} 
+          userRole={userRole} 
           usuarios={usuarios} 
           usuarioId={usuario.id}
           estoque={estoque}
