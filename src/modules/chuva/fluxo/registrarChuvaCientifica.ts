@@ -1,4 +1,4 @@
-import { pipelineCientifico } from "../../eventosAgronomicos";
+import { pipelineCientifico } from "../../eventosAgronomicos/pipelineCientifico";
 import { EventoChuva } from "./eventoChuva";
 
 type Params = {

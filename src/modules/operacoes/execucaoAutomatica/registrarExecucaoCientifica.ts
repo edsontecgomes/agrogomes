@@ -1,7 +1,9 @@
 import { pipelineCientifico } from "../../eventosAgronomicos/pipelineCientifico";
+
 import { OrdemProgramada } from "../ordemProgramada/ordemProgramada";
 import { ExecucaoOrdem } from "./execucaoOrdem";
 import { execucaoParaEntradaCientifica } from "./execucaoParaEntradaCientifica";
+import { resolverContextoExecucaoEspacial } from "./resolverContextoExecucaoEspacial";
 
 type Params = {
   producerId: string;
@@ -14,19 +16,42 @@ export async function registrarExecucaoCientifica({
   ordem,
   execucao,
 }: Params) {
-  const entrada = execucaoParaEntradaCientifica({
-    ordem,
-    execucao,
-  });
+  const entrada =
+    execucaoParaEntradaCientifica({
+      ordem,
+      execucao,
+    });
+
+  const contexto =
+    await resolverContextoExecucaoEspacial({
+      producerId,
+      ordem,
+      execucao,
+    });
 
   return pipelineCientifico({
-    entrada,
-    contexto: {
-      producerId,
-      farmId: ordem.farmId,
-      talhaoId: ordem.talhaoId,
-      ordemProgramadaId: ordem.id,
-      localizacao: entrada.localizacao,
+    entrada: {
+      ...entrada,
+
+      payloadOriginal: {
+        ...entrada.payloadOriginal,
+
+        resolucaoTrajeto: {
+          totalPontos:
+            execucao.trajetos.length,
+
+          ordemProgramadaId:
+            ordem.id,
+
+          talhaoId:
+            ordem.talhaoId,
+
+          larguraOperacionalMetros:
+            ordem.larguraOperacionalMetros,
+        },
+      },
     },
+
+    contexto,
   });
 }

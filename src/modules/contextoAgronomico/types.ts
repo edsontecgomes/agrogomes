@@ -4,6 +4,15 @@ export type CoordenadaContexto = {
   accuracy?: number;
 };
 
+export type MetodoResolucaoEspacial =
+  | "ponto_no_poligono"
+  | "intersecao_trajeto"
+  | "ponto_unico"
+  | "talhao_completo"
+  | "sem_localizacao"
+  | "trajeto_invalido"
+  | "nenhuma_uei";
+
 export type ContextoAgronomicoResolvido = {
   producerId: string;
   farmId: string;
@@ -11,13 +20,10 @@ export type ContextoAgronomicoResolvido = {
   talhaoId?: string;
 
   ueiIds?: string[];
-
   gdaIds?: string[];
 
   safraId?: string;
-
   planejamentoId?: string;
-
   cultura?: string;
 
   origemResolucao:
@@ -28,6 +34,9 @@ export type ContextoAgronomicoResolvido = {
     | "sistema";
 
   localizacao?: CoordenadaContexto;
+
+  metodoResolucaoEspacial?: MetodoResolucaoEspacial;
+  confiabilidadeEspacial?: number;
 
   confiabilidadeContexto: number;
 
@@ -45,4 +54,12 @@ export type ResolverContextoParams = {
   localizacao?: CoordenadaContexto;
 
   dataReferencia?: string;
+
+  ueiIdsResolvidos?: string[];
+  gdaIdsResolvidos?: string[];
+
+  metodoResolucaoEspacial?: MetodoResolucaoEspacial;
+  confiabilidadeEspacial?: number;
+
+  observacoesEspaciais?: string[];
 };
