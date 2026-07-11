@@ -8,18 +8,58 @@ export type NivelConfiabilidade =
   | "muito_alto";
 
 export type TipoEntidade =
+  | "produtor"
+  | "fazenda"
+  | "talhao"
   | "hectare"
+  | "uei"
+  | "gda"
   | "safra"
   | "manejo"
   | "chuva"
   | "solo"
   | "genetica"
   | "operacao"
-  | "produtividade";
+  | "produto"
+  | "equipamento"
+  | "produtividade"
+  | "evento";
 
 export type TipoEvento =
   | "coleta"
   | "aplicacao"
   | "colheita"
   | "clima"
-  | "analise";
+  | "analise"
+  | "chuva"
+  | "plantio"
+  | "adubacao"
+  | "pulverizacao"
+  | "manejo"
+  | "execucao_ordem"
+  | "uso_produto"
+  | "observacao"
+  | "solo"
+  | "telemetria";
+
+export type TipoRelacaoCientifica =
+  | "pertence_a"
+  | "ocorreu_em"
+  | "afetou"
+  | "originou"
+  | "utilizou"
+  | "executado_por"
+  | "associado_a"
+  | "evidencia_de"
+  | "precede"
+  | "sucede"
+  | "correlacionado_com";
+
+export type FonteDadoCientifico =
+  | "evento_agronomico"
+  | "timeline"
+  | "sensor"
+  | "operador"
+  | "sistema"
+  | "importacao"
+  | "motor_cientifico";
