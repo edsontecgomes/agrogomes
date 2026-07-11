@@ -1,4 +1,5 @@
 import { ContextoAgronomicoResolvido } from "../contextoAgronomico/types";
+import { criarPayloadTemporalEvento } from "../motorTemporal/criarPayloadTemporalEvento";
 
 import { criarAuditoriaEvento } from "./auditoriaEvento";
 import { EventoAgronomicoEntrada } from "./eventoEntrada";
@@ -12,21 +13,55 @@ export function montarEventoComContexto(
   EventoAgronomico,
   "id" | "createdAt" | "updatedAt" | "qualidadeDado"
 > {
+  const dataEvento =
+    entrada.dataEvento ||
+    new Date().toISOString();
+
+  const contextoTemporal =
+    criarPayloadTemporalEvento({
+      dataEvento,
+
+      safraId:
+        contexto.safraId,
+
+      cultura:
+        contexto.cultura,
+
+      origem:
+        "evento",
+
+      precisao:
+        entrada.dataEvento
+          ? "exata"
+          : "estimada",
+    });
+
   const evento = {
-    producerId: contexto.producerId,
-    farmId: contexto.farmId,
-    talhaoId: contexto.talhaoId,
-    ueiIds: contexto.ueiIds,
-    gdaIds: contexto.gdaIds,
+    producerId:
+      contexto.producerId,
 
-    tipo: entrada.tipo,
-    origem: entrada.origem,
+    farmId:
+      contexto.farmId,
 
-    dataEvento:
-      entrada.dataEvento ||
-      new Date().toISOString(),
+    talhaoId:
+      contexto.talhaoId,
 
-    responsavelId: entrada.responsavelId,
+    ueiIds:
+      contexto.ueiIds,
+
+    gdaIds:
+      contexto.gdaIds,
+
+    tipo:
+      entrada.tipo,
+
+    origem:
+      entrada.origem,
+
+    dataEvento,
+
+    responsavelId:
+      entrada.responsavelId,
 
     localizacao:
       entrada.localizacao ||
@@ -36,10 +71,14 @@ export function montarEventoComContexto(
       ...entrada.payloadOriginal,
 
       contexto: {
-        safraId: contexto.safraId,
+        safraId:
+          contexto.safraId,
+
         planejamentoId:
           contexto.planejamentoId,
-        cultura: contexto.cultura,
+
+        cultura:
+          contexto.cultura,
 
         origemResolucao:
           contexto.origemResolucao,
@@ -57,7 +96,10 @@ export function montarEventoComContexto(
           contexto.observacoes,
       },
 
-      auditoria: criarAuditoriaEvento(),
+      contextoTemporal,
+
+      auditoria:
+        criarAuditoriaEvento(),
     },
   };
 
@@ -69,6 +111,7 @@ export function montarEventoComContexto(
 
     payloadOriginal: {
       ...evento.payloadOriginal,
+
       qualidadeCientifica,
     },
   };

@@ -8,4 +8,8 @@ export * from "./registrarExecucaoAgronomica";
 
 export * from "./execucaoParaEntradaCientifica";
 export * from "./resolverContextoExecucaoEspacial";
+
+export * from "./resolverCoberturaExecucao";
+export * from "./criarPayloadCoberturaExecucao";
+
 export * from "./registrarExecucaoCientifica";

@@ -11,7 +11,9 @@ export type MetodoResolucaoEspacial =
   | "talhao_completo"
   | "sem_localizacao"
   | "trajeto_invalido"
-  | "nenhuma_uei";
+  | "nenhuma_uei"
+  | "buffer_trajeto"
+| "largura_invalida";
 
 export type ContextoAgronomicoResolvido = {
   producerId: string;
