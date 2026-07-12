@@ -1,4 +1,3 @@
-import { agruparAmostrasPorFator } from "./agruparAmostrasPorFator";
 import { calcularConfiabilidadeAmostra } from "./calcularConfiabilidadeAmostra";
 import { calcularCorrelacaoPearson } from "./calcularCorrelacaoPearson";
 import { calcularRegressaoLinear } from "./calcularRegressaoLinear";
@@ -26,8 +25,7 @@ export function processarMotorEstatistico({
   const amostrasDoFator =
     amostras.filter(
       (amostra) =>
-        amostra.fator ===
-        fatorPrincipal,
+        amostra.fator === fatorPrincipal,
     );
 
   const resultadoOutliers =
@@ -37,8 +35,7 @@ export function processarMotorEstatistico({
 
   const valoresValidos =
     resultadoOutliers.amostrasValidas.map(
-      (amostra) =>
-        amostra.valor,
+      (amostra) => amostra.valor,
     );
 
   const resumo =
@@ -84,19 +81,6 @@ export function processarMotorEstatistico({
       },
     );
 
-  const grupos =
-    agruparAmostrasPorFator(
-      amostras,
-    );
-
-  const comparacoes = grupos
-    .filter(
-      (grupo) =>
-        grupo.fator !==
-        fatorPrincipal,
-    )
-    .slice(0, 0);
-
   return {
     fatorPrincipal,
 
@@ -112,7 +96,7 @@ export function processarMotorEstatistico({
 
     regressoes,
 
-    comparacoes,
+    comparacoes: [],
 
     outlierIds:
       resultadoOutliers.outliers.map(
