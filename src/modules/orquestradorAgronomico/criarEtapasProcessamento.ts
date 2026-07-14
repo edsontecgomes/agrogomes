@@ -1,30 +1,48 @@
+import {
+  ORDEM_ETAPAS_AGRONOMICAS,
+} from "./ordemEtapasAgronomicas";
+
 import type {
   NomeEtapaAgronomica,
+  ObrigatoriedadeEtapa,
   RegistroEtapaAgronomica,
 } from "./types";
 
-const ORDEM_ETAPAS: NomeEtapaAgronomica[] = [
-  "recepcao",
-  "validacao",
-  "idempotencia",
-  "registro_evento",
-  "contexto_agronomico",
-  "timeline",
-  "motor_cientifico",
-  "motor_estatistico",
-  "motor_aprendizagem",
-  "motor_conhecimento",
-  "motor_recomendacao",
-  "auditoria",
-  "finalizacao",
-];
+function definirObrigatoriedade(
+  etapa: NomeEtapaAgronomica,
+): ObrigatoriedadeEtapa {
+  const obrigatorias:
+    NomeEtapaAgronomica[] = [
+      "recepcao",
+      "validacao",
+      "idempotencia",
+      "contexto_agronomico",
+      "registro_evento",
+      "timeline",
+      "auditoria",
+      "finalizacao",
+    ];
+
+  return obrigatorias.includes(etapa)
+    ? "obrigatoria"
+    : "opcional";
+}
 
 export function criarEtapasProcessamento(): RegistroEtapaAgronomica[] {
-  return ORDEM_ETAPAS.map(
+  return ORDEM_ETAPAS_AGRONOMICAS.map(
     (etapa) => ({
       etapa,
 
-      status: "pendente",
+      status:
+        "pendente",
+
+      obrigatoriedade:
+        definirObrigatoriedade(
+          etapa,
+        ),
+
+      tentativas:
+        0,
     }),
   );
 }

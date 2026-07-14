@@ -2,6 +2,8 @@ export * from "./types";
 export * from "./typesIdempotencia";
 export * from "./typesMotoresOrquestrados";
 
+export * from "./ordemEtapasAgronomicas";
+
 export * from "./gerarIdProcessamento";
 export * from "./gerarChaveIdempotencia";
 
@@ -22,6 +24,9 @@ export * from "./criarResultadoDeRegistroExistente";
 export * from "./finalizarRegistroIdempotencia";
 
 export * from "./salvarAuditoriaProcessamento";
+export * from "./salvarCheckpointProcessamento";
+
+export * from "./executarEtapaProtegida";
 
 export * from "./executarPipelineBaseEvento";
 export * from "./executarMotorCientificoOrquestrado";
@@ -32,7 +37,12 @@ export * from "./executarMotorRecomendacaoOrquestrado";
 
 export * from "./extrairContextoMotores";
 export * from "./deveProcessarMotor";
+
 export * from "./marcarEtapaIgnorada";
+export * from "./marcarEtapaPorDependencia";
+
+export * from "./resolverPlanoRetomada";
+export * from "./criarResumoTecnicoProcessamento";
 
 export * from "./concluirEtapasPipelineBase";
 

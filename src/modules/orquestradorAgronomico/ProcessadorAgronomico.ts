@@ -1,5 +1,4 @@
 import { adicionarAlertasResultado } from "./adicionarAlertaResultado";
-import { adicionarErroResultado } from "./adicionarErroResultado";
 import { adicionarRegistroResultado } from "./adicionarRegistroResultado";
 import { atualizarEtapaProcessamento } from "./atualizarEtapaProcessamento";
 import { concluirEtapasPipelineBase } from "./concluirEtapasPipelineBase";
@@ -7,6 +6,7 @@ import { criarRegistroProcessamento } from "./criarRegistroProcessamento";
 import { criarResultadoDeRegistroExistente } from "./criarResultadoDeRegistroExistente";
 import { criarResultadoInicial } from "./criarResultadoInicial";
 import { deveProcessarMotor } from "./deveProcessarMotor";
+import { executarEtapaProtegida } from "./executarEtapaProtegida";
 import { executarMotorAprendizagemOrquestrado } from "./executarMotorAprendizagemOrquestrado";
 import { executarMotorCientificoOrquestrado } from "./executarMotorCientificoOrquestrado";
 import { executarMotorConhecimentoOrquestrado } from "./executarMotorConhecimentoOrquestrado";
@@ -19,14 +19,14 @@ import { finalizarResultadoProcessamento } from "./finalizarResultadoProcessamen
 import { gerarChaveIdempotencia } from "./gerarChaveIdempotencia";
 import { gerarIdProcessamento } from "./gerarIdProcessamento";
 import { marcarEtapaIgnorada } from "./marcarEtapaIgnorada";
-import { normalizarErroProcessamento } from "./normalizarErroProcessamento";
+import { marcarEtapaPorDependencia } from "./marcarEtapaPorDependencia";
 import { reservarChaveIdempotencia } from "./reservarChaveIdempotencia";
 import { salvarAuditoriaSemInterromper } from "./salvarAuditoriaProcessamento";
+import { salvarCheckpointSemInterromper } from "./salvarCheckpointProcessamento";
 import { validarEntradaOrquestrador } from "./validarEntradaOrquestrador";
 
 import type {
   EntradaOrquestradorAgronomico,
-  NomeEtapaAgronomica,
   ResultadoOrquestradorAgronomico,
 } from "./types";
 
@@ -51,801 +51,261 @@ export class ProcessadorAgronomico {
         chaveIdempotencia,
       });
 
-    let etapaAtual: NomeEtapaAgronomica =
-      "recepcao";
+    resultado = {
+      ...resultado,
 
-    try {
-      resultado = {
-        ...resultado,
+      status:
+        "validando",
 
-        status: "validando",
-
-        etapas:
-          atualizarEtapaProcessamento({
-            etapas:
-              resultado.etapas,
-
-            etapa:
-              "recepcao",
-
-            status:
-              "concluida",
-
-            mensagem:
-              "Entrada recebida pelo Orquestrador Agronômico.",
-          }),
-      };
-
-      resultado =
-        adicionarRegistroResultado(
-          resultado,
-          criarRegistroProcessamento({
-            processamentoId,
-
-            etapa:
-              "recepcao",
-
-            codigo:
-              "ENTRADA_RECEBIDA",
-
-            mensagem:
-              "Evento recebido para processamento agronômico completo.",
-
-            detalhes: {
-              tipoEvento:
-                entrada.entrada.tipo,
-
-              farmId:
-                entrada.contexto.farmId,
-
-              origemSolicitacao:
-                entrada.origemSolicitacao ??
-                "sistema",
-            },
-          }),
-        );
-
-      etapaAtual = "validacao";
-
-      resultado = {
-        ...resultado,
-
-        etapas:
-          atualizarEtapaProcessamento({
-            etapas:
-              resultado.etapas,
-
-            etapa:
-              "validacao",
-
-            status:
-              "processando",
-
-            mensagem:
-              "Validando contrato de entrada.",
-          }),
-      };
-
-      const validacao =
-        validarEntradaOrquestrador(
-          entrada,
-        );
-
-      resultado =
-        adicionarAlertasResultado(
-          resultado,
-          validacao.alertas,
-        );
-
-      if (!validacao.valida) {
-        throw new Error(
-          validacao.erros.join(" "),
-        );
-      }
-
-      resultado = {
-        ...resultado,
-
-        status: "processando",
-
-        etapas:
-          atualizarEtapaProcessamento({
-            etapas:
-              resultado.etapas,
-
-            etapa:
-              "validacao",
-
-            status:
-              validacao.alertas.length > 0
-                ? "concluida_com_alertas"
-                : "concluida",
-
-            mensagem:
-              "Contrato de entrada validado.",
-
-            detalhes: {
-              totalAlertas:
-                validacao.alertas.length,
-            },
-          }),
-      };
-
-      etapaAtual = "idempotencia";
-
-      resultado = {
-        ...resultado,
-
-        etapas:
-          atualizarEtapaProcessamento({
-            etapas:
-              resultado.etapas,
-
-            etapa:
-              "idempotencia",
-
-            status:
-              "processando",
-
-            mensagem:
-              "Reservando chave de idempotência.",
-          }),
-      };
-
-      const reserva =
-        await reservarChaveIdempotencia({
-          processamentoId,
-
-          chaveIdempotencia,
-
-          entrada,
-        });
-
-      if (!reserva.reservada) {
-        return criarResultadoDeRegistroExistente(
-          reserva.registro,
-        );
-      }
-
-      resultado = {
-        ...resultado,
-
-        processamentoAnteriorId:
-          reserva.registro
-            .processamentoAnteriorId,
-
-        tentativas:
-          reserva.registro.tentativas,
-
-        etapas:
-          atualizarEtapaProcessamento({
-            etapas:
-              resultado.etapas,
-
-            etapa:
-              "idempotencia",
-
-            status:
-              "concluida",
-
-            mensagem:
-              reserva.motivo === "novo"
-                ? "Nova chave de idempotência reservada."
-                : "Reprocessamento ou recuperação de falha autorizado.",
-
-            detalhes: {
-              motivo:
-                reserva.motivo,
-
-              tentativas:
-                reserva.registro.tentativas,
-
-              processamentoAnteriorId:
-                reserva.registro
-                  .processamentoAnteriorId,
-            },
-          }),
-      };
-
-      await salvarAuditoriaSemInterromper(
-        entrada,
-        resultado,
-      );
-
-      etapaAtual =
-        "contexto_agronomico";
-
-      resultado = {
-        ...resultado,
-
-        etapas:
-          atualizarEtapaProcessamento({
-            etapas:
-              resultado.etapas,
-
-            etapa:
-              "contexto_agronomico",
-
-            status:
-              "processando",
-
-            mensagem:
-              "Resolvendo contexto e registrando Evento Agronômico.",
-          }),
-      };
-
-      const evento =
-        await executarPipelineBaseEvento(
-          entrada,
-        );
-
-      resultado = {
-        ...resultado,
-
-        evento,
-
-        eventoAgronomicoId:
-          evento.id,
-      };
-
-      resultado =
-        concluirEtapasPipelineBase(
-          resultado,
-        );
-
-      resultado =
-        adicionarRegistroResultado(
-          resultado,
-          criarRegistroProcessamento({
-            processamentoId,
-
-            etapa:
-              "registro_evento",
-
-            codigo:
-              "EVENTO_AGRONOMICO_REGISTRADO",
-
-            mensagem:
-              "Evento e Timeline registrados com sucesso.",
-
-            detalhes: {
-              eventoAgronomicoId:
-                evento.id,
-
-              talhaoId:
-                evento.talhaoId,
-
-              ueiIds:
-                evento.ueiIds,
-
-              gdaIds:
-                evento.gdaIds,
-            },
-          }),
-        );
-
-      const contextoMotores =
-        extrairContextoMotores(
-          entrada,
-          evento,
-        );
-
-      await salvarAuditoriaSemInterromper(
-        entrada,
-        resultado,
-      );
-
-      etapaAtual =
-        "motor_cientifico";
-
-      resultado = {
-        ...resultado,
-
-        etapas:
-          atualizarEtapaProcessamento({
-            etapas:
-              resultado.etapas,
-
-            etapa:
-              "motor_cientifico",
-
-            status:
-              "processando",
-
-            mensagem:
-              "Processando Motor Científico.",
-          }),
-      };
-
-      const cientifico =
-        await executarMotorCientificoOrquestrado(
-          evento,
-        );
-
-      resultado = {
-        ...resultado,
-
-        resultadoCientificoId:
-          cientifico.resultadoId,
-
-        etapas:
-          atualizarEtapaProcessamento({
-            etapas:
-              resultado.etapas,
-
-            etapa:
-              "motor_cientifico",
-
-            status:
-              "concluida",
-
-            mensagem:
-              "Motor Científico concluído.",
-
-            detalhes: {
-              resultadoCientificoId:
-                cientifico.resultadoId,
-
-              totalEntidades:
-                cientifico.resultado
-                  .totalEntidades,
-
-              totalEvidencias:
-                cientifico.resultado
-                  .totalEvidencias,
-
-              totalHipoteses:
-                cientifico.resultado
-                  .totalHipoteses,
-
-              totalDescobertas:
-                cientifico.resultado
-                  .totalDescobertas,
-            },
-          }),
-      };
-
-      let estatistico:
-        Awaited<
-          ReturnType<
-            typeof executarMotorEstatisticoOrquestrado
-          >
-        > | undefined;
-
-      etapaAtual =
-        "motor_estatistico";
-
-      if (
-        deveProcessarMotor(
-          entrada,
-          "estatistica",
-        )
-      ) {
-        resultado = {
-          ...resultado,
-
-          etapas:
-            atualizarEtapaProcessamento({
-              etapas:
-                resultado.etapas,
-
-              etapa:
-                "motor_estatistico",
-
-              status:
-                "processando",
-
-              mensagem:
-                "Processando Motor Estatístico.",
-            }),
-        };
-
-        estatistico =
-          await executarMotorEstatisticoOrquestrado(
-            evento,
-            contextoMotores,
-          );
-
-        resultado = {
-          ...resultado,
-
-          resultadoEstatisticoId:
-            estatistico.resultadoId,
-
-          etapas:
-            atualizarEtapaProcessamento({
-              etapas:
-                resultado.etapas,
-
-              etapa:
-                "motor_estatistico",
-
-              status:
-                "concluida",
-
-              mensagem:
-                "Motor Estatístico concluído.",
-
-              detalhes: {
-                resultadoEstatisticoId:
-                  estatistico.resultadoId,
-
-                totalEventos:
-                  estatistico.resultado
-                    .totalEventos,
-
-                totalAmostras:
-                  estatistico.resultado
-                    .totalAmostras,
-
-                totalAnalises:
-                  estatistico.resultado
-                    .resultados.length,
-              },
-            }),
-        };
-      } else {
-        resultado =
-          marcarEtapaIgnorada(
-            resultado,
-            "motor_estatistico",
-            "Motor Estatístico desativado para este processamento.",
-          );
-      }
-
-      etapaAtual =
-        "motor_aprendizagem";
-
-      let aprendizagem:
-        Awaited<
-          ReturnType<
-            typeof executarMotorAprendizagemOrquestrado
-          >
-        > | undefined;
-
-      if (
-        deveProcessarMotor(
-          entrada,
-          "aprendizado",
-        )
-      ) {
-        resultado = {
-          ...resultado,
-
-          etapas:
-            atualizarEtapaProcessamento({
-              etapas:
-                resultado.etapas,
-
-              etapa:
-                "motor_aprendizagem",
-
-              status:
-                "processando",
-
-              mensagem:
-                "Processando Motor de Aprendizagem.",
-            }),
-        };
-
-        aprendizagem =
-          await executarMotorAprendizagemOrquestrado({
-            resultadoCientifico:
-              cientifico.resultado,
-
-            resultadoEstatistico:
-              estatistico?.resultado,
-
-            contexto:
-              contextoMotores,
-          });
-
-        resultado = {
-          ...resultado,
-
-          aprendizadoIds:
-            aprendizagem.aprendizadoIds,
-
-          etapas:
-            atualizarEtapaProcessamento({
-              etapas:
-                resultado.etapas,
-
-              etapa:
-                "motor_aprendizagem",
-
-              status:
-                "concluida",
-
-              mensagem:
-                "Motor de Aprendizagem concluído.",
-
-              detalhes: {
-                totalAprendizados:
-                  aprendizagem.resultado
-                    .totalAprendizados,
-
-                totalFortes:
-                  aprendizagem.resultado
-                    .totalFortes,
-
-                totalContraditorios:
-                  aprendizagem.resultado
-                    .totalContraditorios,
-
-                confiabilidadeMedia:
-                  aprendizagem.resultado
-                    .confiabilidadeMedia,
-              },
-            }),
-        };
-      } else {
-        resultado =
-          marcarEtapaIgnorada(
-            resultado,
-            "motor_aprendizagem",
-            "Motor de Aprendizagem desativado para este processamento.",
-          );
-      }
-
-      etapaAtual =
-        "motor_conhecimento";
-
-      let conhecimento:
-        Awaited<
-          ReturnType<
-            typeof executarMotorConhecimentoOrquestrado
-          >
-        > | undefined;
-
-      if (
-        deveProcessarMotor(
-          entrada,
-          "conhecimento",
-        ) &&
-        aprendizagem
-      ) {
-        resultado = {
-          ...resultado,
-
-          etapas:
-            atualizarEtapaProcessamento({
-              etapas:
-                resultado.etapas,
-
-              etapa:
-                "motor_conhecimento",
-
-              status:
-                "processando",
-
-              mensagem:
-                "Processando Motor de Conhecimento.",
-            }),
-        };
-
-        conhecimento =
-          await executarMotorConhecimentoOrquestrado(
-            aprendizagem.resultado,
-          );
-
-        resultado = {
-          ...resultado,
-
-          conhecimentoIds:
-            conhecimento.conhecimentoIds,
-
-          etapas:
-            atualizarEtapaProcessamento({
-              etapas:
-                resultado.etapas,
-
-              etapa:
-                "motor_conhecimento",
-
-              status:
-                "concluida",
-
-              mensagem:
-                "Motor de Conhecimento concluído.",
-
-              detalhes: {
-                totalRecebidos:
-                  conhecimento.resultado
-                    .totalRecebidos,
-
-                totalConsolidados:
-                  conhecimento.resultado
-                    .totalConsolidados,
-
-                totalMaduros:
-                  conhecimento.resultado
-                    .totalMaduros,
-
-                totalContraditorios:
-                  conhecimento.resultado
-                    .totalContraditorios,
-              },
-            }),
-        };
-      } else {
-        resultado =
-          marcarEtapaIgnorada(
-            resultado,
-            "motor_conhecimento",
-            aprendizagem
-              ? "Motor de Conhecimento desativado para este processamento."
-              : "Motor de Conhecimento ignorado porque não houve resultado de aprendizagem.",
-          );
-      }
-
-      etapaAtual =
-        "motor_recomendacao";
-
-      if (
-        deveProcessarMotor(
-          entrada,
-          "recomendacao",
-        ) &&
-        conhecimento
-      ) {
-        resultado = {
-          ...resultado,
-
-          etapas:
-            atualizarEtapaProcessamento({
-              etapas:
-                resultado.etapas,
-
-              etapa:
-                "motor_recomendacao",
-
-              status:
-                "processando",
-
-              mensagem:
-                "Processando Motor de Recomendação.",
-            }),
-        };
-
-        const recomendacao =
-          await executarMotorRecomendacaoOrquestrado({
-            conhecimentos:
-              conhecimento.resultado
-                .conhecimentos,
-
-            contexto:
-              contextoMotores,
-          });
-
-        resultado = {
-          ...resultado,
-
-          recomendacaoIds:
-            recomendacao.recomendacaoIds,
-
-          etapas:
-            atualizarEtapaProcessamento({
-              etapas:
-                resultado.etapas,
-
-              etapa:
-                "motor_recomendacao",
-
-              status:
-                "concluida",
-
-              mensagem:
-                "Motor de Recomendação concluído.",
-
-              detalhes: {
-                totalAlternativas:
-                  recomendacao.resultado
-                    .totalAlternativas,
-
-                totalRecomendacoes:
-                  recomendacao.resultado
-                    .totalRecomendacoes,
-
-                totalImpedidas:
-                  recomendacao.resultado
-                    .totalImpedidas,
-
-                recomendacaoPrincipalId:
-                  recomendacao.resultado
-                    .recomendacaoPrincipal
-                    ?.id,
-              },
-            }),
-        };
-      } else {
-        resultado =
-          marcarEtapaIgnorada(
-            resultado,
-            "motor_recomendacao",
-            conhecimento
-              ? "Motor de Recomendação desativado para este processamento."
-              : "Motor de Recomendação ignorado porque não houve conhecimento consolidado.",
-          );
-      }
-
-      let etapasFinalizadas =
+      etapas:
         atualizarEtapaProcessamento({
           etapas:
             resultado.etapas,
 
           etapa:
-            "auditoria",
+            "recepcao",
 
           status:
             "concluida",
 
           mensagem:
-            "Auditoria persistente atualizada.",
-        });
+            "Entrada recebida pelo Orquestrador Agronômico.",
+        }),
 
-      etapasFinalizadas =
-        atualizarEtapaProcessamento({
-          etapas:
-            etapasFinalizadas,
+      ultimaEtapaConcluida:
+        "recepcao",
+    };
+
+    resultado =
+      adicionarRegistroResultado(
+        resultado,
+        criarRegistroProcessamento({
+          processamentoId,
 
           etapa:
-            "finalizacao",
+            "recepcao",
 
-          status:
-            "concluida",
+          codigo:
+            "ENTRADA_RECEBIDA",
 
           mensagem:
-            "OA4 finalizado com a cadeia completa de motores.",
-        });
+            "Evento recebido para processamento agronômico resiliente.",
+        }),
+      );
 
+    const validacao =
+      validarEntradaOrquestrador(
+        entrada,
+      );
+
+    resultado =
+      adicionarAlertasResultado(
+        resultado,
+        validacao.alertas,
+      );
+
+    if (!validacao.valida) {
       resultado = {
         ...resultado,
 
-        etapas:
-          etapasFinalizadas,
-      };
+        status:
+          "falhou",
 
-      resultado =
-        adicionarRegistroResultado(
-          resultado,
-          criarRegistroProcessamento({
-            processamentoId,
+        etapaComFalha:
+          "validacao",
+
+        etapas:
+          atualizarEtapaProcessamento({
+            etapas:
+              resultado.etapas,
 
             etapa:
-              "finalizacao",
+              "validacao",
 
-            codigo:
-              "CADEIA_INTELIGENTE_CONCLUIDA",
+            status:
+              "falhou",
 
             mensagem:
-              "Todos os motores habilitados foram processados.",
-
-            detalhes: {
-              eventoAgronomicoId:
-                resultado.eventoAgronomicoId,
-
-              resultadoCientificoId:
-                resultado.resultadoCientificoId,
-
-              resultadoEstatisticoId:
-                resultado.resultadoEstatisticoId,
-
-              totalAprendizados:
-                resultado.aprendizadoIds.length,
-
-              totalConhecimentos:
-                resultado.conhecimentoIds.length,
-
-              totalRecomendacoes:
-                resultado.recomendacaoIds.length,
-            },
+              validacao.erros.join(
+                " ",
+              ),
           }),
-        );
+      };
 
       resultado =
         finalizarResultadoProcessamento({
           resultado,
+
+          status:
+            "falhou",
+        });
+
+      await salvarAuditoriaSemInterromper(
+        entrada,
+        resultado,
+      );
+
+      return resultado;
+    }
+
+    resultado = {
+      ...resultado,
+
+      status:
+        "processando",
+
+      ultimaEtapaConcluida:
+        "validacao",
+
+      etapas:
+        atualizarEtapaProcessamento({
+          etapas:
+            resultado.etapas,
+
+          etapa:
+            "validacao",
+
+          status:
+            validacao.alertas.length > 0
+              ? "concluida_com_alertas"
+              : "concluida",
+
+          mensagem:
+            "Contrato de entrada validado.",
+        }),
+    };
+
+    await salvarCheckpointSemInterromper(
+      entrada,
+      resultado,
+    );
+
+    const reserva =
+      await reservarChaveIdempotencia({
+        processamentoId,
+
+        chaveIdempotencia,
+
+        entrada,
+      });
+
+    if (!reserva.reservada) {
+      return criarResultadoDeRegistroExistente(
+        reserva.registro,
+      );
+    }
+
+    resultado = {
+      ...resultado,
+
+      processamentoAnteriorId:
+        reserva.registro
+          .processamentoAnteriorId,
+
+      tentativas:
+        reserva.registro.tentativas,
+
+      ultimaEtapaConcluida:
+        "idempotencia",
+
+      etapas:
+        atualizarEtapaProcessamento({
+          etapas:
+            resultado.etapas,
+
+          etapa:
+            "idempotencia",
+
+          status:
+            "concluida",
+
+          mensagem:
+            "Chave de idempotência reservada.",
+
+          detalhes: {
+            motivo:
+              reserva.motivo,
+
+            tentativas:
+              reserva.registro.tentativas,
+          },
+        }),
+    };
+
+    await salvarCheckpointSemInterromper(
+      entrada,
+      resultado,
+    );
+
+    const etapaBase =
+      await executarEtapaProtegida({
+        resultado,
+
+        etapa:
+          "contexto_agronomico",
+
+        obrigatoriedade:
+          "obrigatoria",
+
+        mensagemInicio:
+          "Resolvendo contexto e registrando Evento Agronômico.",
+
+        mensagemSucesso:
+          "Contexto, Evento Agronômico e Timeline processados.",
+
+        codigoSucesso:
+          "PIPELINE_BASE_CONCLUIDO",
+
+        codigoErro:
+          "FALHA_PIPELINE_BASE",
+
+        operacao: () =>
+          executarPipelineBaseEvento(
+            entrada,
+          ),
+
+        aplicarResultado: (
+          resultadoAtual,
+          evento,
+        ) => ({
+          ...resultadoAtual,
+
+          evento,
+
+          eventoAgronomicoId:
+            evento.id,
+        }),
+
+        detalhesSucesso: (
+          evento,
+        ) => ({
+          eventoAgronomicoId:
+            evento.id,
+
+          talhaoId:
+            evento.talhaoId,
+
+          ueiIds:
+            evento.ueiIds,
+
+          gdaIds:
+            evento.gdaIds,
+        }),
+      });
+
+    resultado =
+      etapaBase.resultado;
+
+    if (
+      etapaBase.interromper ||
+      !etapaBase.valor
+    ) {
+      resultado =
+        finalizarResultadoProcessamento({
+          resultado,
+
+          status:
+            "falhou",
         });
 
       await salvarAuditoriaSemInterromper(
@@ -858,100 +318,502 @@ export class ProcessadorAgronomico {
       );
 
       return resultado;
-    } catch (erro) {
-      const erroNormalizado =
-        normalizarErroProcessamento({
-          erro,
+    }
 
-          etapa:
-            etapaAtual,
+    const evento =
+      etapaBase.valor;
 
-          codigo:
-            "FALHA_ORQUESTRADOR_OA4",
-
-          recuperavel:
-            true,
-        });
-
-      resultado =
-        adicionarErroResultado(
-          resultado,
-          erroNormalizado,
-        );
-
-      resultado = {
-        ...resultado,
-
-        status:
-          resultado.evento
-            ? "processado_com_alertas"
-            : "falhou",
-
-        etapas:
-          atualizarEtapaProcessamento({
-            etapas:
-              resultado.etapas,
-
-            etapa:
-              etapaAtual,
-
-            status:
-              "falhou",
-
-            mensagem:
-              erroNormalizado.mensagem,
-          }),
-      };
-
-      resultado =
-        adicionarRegistroResultado(
-          resultado,
-          criarRegistroProcessamento({
-            processamentoId,
-
-            etapa:
-              etapaAtual,
-
-            severidade:
-              resultado.evento
-                ? "alerta"
-                : "erro",
-
-            codigo:
-              erroNormalizado.codigo,
-
-            mensagem:
-              erroNormalizado.mensagem,
-          }),
-        );
-
-      resultado =
-        finalizarResultadoProcessamento({
-          resultado,
-
-          status:
-            resultado.evento
-              ? "processado_com_alertas"
-              : "falhou",
-        });
-
-      await salvarAuditoriaSemInterromper(
-        entrada,
+    resultado =
+      concluirEtapasPipelineBase(
         resultado,
       );
 
-      try {
-        await finalizarRegistroIdempotencia(
-          resultado,
-        );
-      } catch (erroIdempotencia) {
-        console.warn(
-          "Falha ao finalizar registro de idempotência:",
-          erroIdempotencia,
-        );
-      }
+    resultado = {
+      ...resultado,
 
-      return resultado;
+      ultimaEtapaConcluida:
+        "timeline",
+    };
+
+    await salvarCheckpointSemInterromper(
+      entrada,
+      resultado,
+    );
+
+    const contextoMotores =
+      extrairContextoMotores(
+        entrada,
+        evento,
+      );
+
+    const etapaCientifica =
+      await executarEtapaProtegida({
+        resultado,
+
+        etapa:
+          "motor_cientifico",
+
+        obrigatoriedade:
+          "opcional",
+
+        mensagemInicio:
+          "Processando Motor Científico.",
+
+        mensagemSucesso:
+          "Motor Científico concluído.",
+
+        codigoSucesso:
+          "MOTOR_CIENTIFICO_CONCLUIDO",
+
+        codigoErro:
+          "FALHA_MOTOR_CIENTIFICO",
+
+        operacao: () =>
+          executarMotorCientificoOrquestrado(
+            evento,
+          ),
+
+        aplicarResultado: (
+          resultadoAtual,
+          cientifico,
+        ) => ({
+          ...resultadoAtual,
+
+          resultadoCientificoId:
+            cientifico.resultadoId,
+        }),
+
+        detalhesSucesso: (
+          cientifico,
+        ) => ({
+          resultadoCientificoId:
+            cientifico.resultadoId,
+
+          totalEvidencias:
+            cientifico.resultado
+              .totalEvidencias,
+
+          totalHipoteses:
+            cientifico.resultado
+              .totalHipoteses,
+        }),
+      });
+
+    resultado =
+      etapaCientifica.resultado;
+
+    await salvarCheckpointSemInterromper(
+      entrada,
+      resultado,
+    );
+
+    let estatistico:
+      Awaited<
+        ReturnType<
+          typeof executarMotorEstatisticoOrquestrado
+        >
+      > | undefined;
+
+    if (
+      deveProcessarMotor(
+        entrada,
+        "estatistica",
+      )
+    ) {
+      const etapaEstatistica =
+        await executarEtapaProtegida({
+          resultado,
+
+          etapa:
+            "motor_estatistico",
+
+          obrigatoriedade:
+            "opcional",
+
+          mensagemInicio:
+            "Processando Motor Estatístico.",
+
+          mensagemSucesso:
+            "Motor Estatístico concluído.",
+
+          codigoSucesso:
+            "MOTOR_ESTATISTICO_CONCLUIDO",
+
+          codigoErro:
+            "FALHA_MOTOR_ESTATISTICO",
+
+          operacao: () =>
+            executarMotorEstatisticoOrquestrado(
+              evento,
+              contextoMotores,
+            ),
+
+          aplicarResultado: (
+            resultadoAtual,
+            valor,
+          ) => ({
+            ...resultadoAtual,
+
+            resultadoEstatisticoId:
+              valor.resultadoId,
+          }),
+
+          detalhesSucesso: (
+            valor,
+          ) => ({
+            resultadoEstatisticoId:
+              valor.resultadoId,
+
+            totalAmostras:
+              valor.resultado
+                .totalAmostras,
+          }),
+        });
+
+      resultado =
+        etapaEstatistica.resultado;
+
+      estatistico =
+        etapaEstatistica.valor;
+    } else {
+      resultado =
+        marcarEtapaIgnorada(
+          resultado,
+          "motor_estatistico",
+          "Motor Estatístico desativado.",
+        );
     }
+
+    await salvarCheckpointSemInterromper(
+      entrada,
+      resultado,
+    );
+
+    let aprendizagem:
+      Awaited<
+        ReturnType<
+          typeof executarMotorAprendizagemOrquestrado
+        >
+      > | undefined;
+
+    if (!etapaCientifica.valor) {
+      resultado =
+        marcarEtapaPorDependencia(
+          resultado,
+          "motor_aprendizagem",
+          "motor_cientifico",
+        );
+    } else if (
+      deveProcessarMotor(
+        entrada,
+        "aprendizado",
+      )
+    ) {
+      const etapaAprendizagem =
+        await executarEtapaProtegida({
+          resultado,
+
+          etapa:
+            "motor_aprendizagem",
+
+          obrigatoriedade:
+            "opcional",
+
+          mensagemInicio:
+            "Processando Motor de Aprendizagem.",
+
+          mensagemSucesso:
+            "Motor de Aprendizagem concluído.",
+
+          codigoSucesso:
+            "MOTOR_APRENDIZAGEM_CONCLUIDO",
+
+          codigoErro:
+            "FALHA_MOTOR_APRENDIZAGEM",
+
+          operacao: () =>
+            executarMotorAprendizagemOrquestrado({
+              resultadoCientifico:
+                etapaCientifica.valor!
+                  .resultado,
+
+              resultadoEstatistico:
+                estatistico?.resultado,
+
+              contexto:
+                contextoMotores,
+            }),
+
+          aplicarResultado: (
+            resultadoAtual,
+            valor,
+          ) => ({
+            ...resultadoAtual,
+
+            aprendizadoIds:
+              valor.aprendizadoIds,
+          }),
+
+          detalhesSucesso: (
+            valor,
+          ) => ({
+            totalAprendizados:
+              valor.resultado
+                .totalAprendizados,
+
+            totalFortes:
+              valor.resultado
+                .totalFortes,
+          }),
+        });
+
+      resultado =
+        etapaAprendizagem.resultado;
+
+      aprendizagem =
+        etapaAprendizagem.valor;
+    } else {
+      resultado =
+        marcarEtapaIgnorada(
+          resultado,
+          "motor_aprendizagem",
+          "Motor de Aprendizagem desativado.",
+        );
+    }
+
+    await salvarCheckpointSemInterromper(
+      entrada,
+      resultado,
+    );
+
+    let conhecimento:
+      Awaited<
+        ReturnType<
+          typeof executarMotorConhecimentoOrquestrado
+        >
+      > | undefined;
+
+    if (!aprendizagem) {
+      resultado =
+        marcarEtapaPorDependencia(
+          resultado,
+          "motor_conhecimento",
+          "motor_aprendizagem",
+        );
+    } else if (
+      deveProcessarMotor(
+        entrada,
+        "conhecimento",
+      )
+    ) {
+      const etapaConhecimento =
+        await executarEtapaProtegida({
+          resultado,
+
+          etapa:
+            "motor_conhecimento",
+
+          obrigatoriedade:
+            "opcional",
+
+          mensagemInicio:
+            "Processando Motor de Conhecimento.",
+
+          mensagemSucesso:
+            "Motor de Conhecimento concluído.",
+
+          codigoSucesso:
+            "MOTOR_CONHECIMENTO_CONCLUIDO",
+
+          codigoErro:
+            "FALHA_MOTOR_CONHECIMENTO",
+
+          operacao: () =>
+            executarMotorConhecimentoOrquestrado(
+              aprendizagem!.resultado,
+            ),
+
+          aplicarResultado: (
+            resultadoAtual,
+            valor,
+          ) => ({
+            ...resultadoAtual,
+
+            conhecimentoIds:
+              valor.conhecimentoIds,
+          }),
+
+          detalhesSucesso: (
+            valor,
+          ) => ({
+            totalConsolidados:
+              valor.resultado
+                .totalConsolidados,
+
+            totalMaduros:
+              valor.resultado
+                .totalMaduros,
+          }),
+        });
+
+      resultado =
+        etapaConhecimento.resultado;
+
+      conhecimento =
+        etapaConhecimento.valor;
+    } else {
+      resultado =
+        marcarEtapaIgnorada(
+          resultado,
+          "motor_conhecimento",
+          "Motor de Conhecimento desativado.",
+        );
+    }
+
+    await salvarCheckpointSemInterromper(
+      entrada,
+      resultado,
+    );
+
+    if (!conhecimento) {
+      resultado =
+        marcarEtapaPorDependencia(
+          resultado,
+          "motor_recomendacao",
+          "motor_conhecimento",
+        );
+    } else if (
+      deveProcessarMotor(
+        entrada,
+        "recomendacao",
+      )
+    ) {
+      const etapaRecomendacao =
+        await executarEtapaProtegida({
+          resultado,
+
+          etapa:
+            "motor_recomendacao",
+
+          obrigatoriedade:
+            "opcional",
+
+          mensagemInicio:
+            "Processando Motor de Recomendação.",
+
+          mensagemSucesso:
+            "Motor de Recomendação concluído.",
+
+          codigoSucesso:
+            "MOTOR_RECOMENDACAO_CONCLUIDO",
+
+          codigoErro:
+            "FALHA_MOTOR_RECOMENDACAO",
+
+          operacao: () =>
+            executarMotorRecomendacaoOrquestrado({
+              conhecimentos:
+                conhecimento!.resultado
+                  .conhecimentos,
+
+              contexto:
+                contextoMotores,
+            }),
+
+          aplicarResultado: (
+            resultadoAtual,
+            valor,
+          ) => ({
+            ...resultadoAtual,
+
+            recomendacaoIds:
+              valor.recomendacaoIds,
+          }),
+
+          detalhesSucesso: (
+            valor,
+          ) => ({
+            totalRecomendacoes:
+              valor.resultado
+                .totalRecomendacoes,
+
+            totalImpedidas:
+              valor.resultado
+                .totalImpedidas,
+          }),
+        });
+
+      resultado =
+        etapaRecomendacao.resultado;
+    } else {
+      resultado =
+        marcarEtapaIgnorada(
+          resultado,
+          "motor_recomendacao",
+          "Motor de Recomendação desativado.",
+        );
+    }
+
+    resultado = {
+      ...resultado,
+
+      etapas:
+        atualizarEtapaProcessamento({
+          etapas:
+            resultado.etapas,
+
+          etapa:
+            "auditoria",
+
+          status:
+            "concluida",
+
+          mensagem:
+            "Auditoria e checkpoints atualizados.",
+        }),
+    };
+
+    resultado = {
+      ...resultado,
+
+      etapas:
+        atualizarEtapaProcessamento({
+          etapas:
+            resultado.etapas,
+
+          etapa:
+            "finalizacao",
+
+          status:
+            "concluida",
+
+          mensagem:
+            "OA5 finalizado com resiliência por etapa.",
+        }),
+
+      ultimaEtapaConcluida:
+        "finalizacao",
+    };
+
+    resultado =
+      finalizarResultadoProcessamento({
+        resultado,
+      });
+
+    await salvarCheckpointSemInterromper(
+      entrada,
+      resultado,
+    );
+
+    await salvarAuditoriaSemInterromper(
+      entrada,
+      resultado,
+    );
+
+    await finalizarRegistroIdempotencia(
+      resultado,
+    );
+
+    return resultado;
   }
 }

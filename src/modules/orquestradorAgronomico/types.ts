@@ -55,6 +55,10 @@ export type OrigemSolicitacaoAgronomica =
   | "sistema"
   | "teste";
 
+export type ObrigatoriedadeEtapa =
+  | "obrigatoria"
+  | "opcional";
+
 export type EntradaOrquestradorAgronomico = {
   entrada: EventoAgronomicoEntrada;
 
@@ -66,6 +70,9 @@ export type EntradaOrquestradorAgronomico = {
     OrigemSolicitacaoAgronomica;
 
   permitirReprocessamento?: boolean;
+
+  etapaRetomada?:
+    NomeEtapaAgronomica;
 
   processarEstatistica?: boolean;
 
@@ -83,11 +90,15 @@ export type RegistroEtapaAgronomica = {
 
   status: StatusEtapaAgronomica;
 
+  obrigatoriedade?: ObrigatoriedadeEtapa;
+
   inicioEm?: string;
 
   fimEm?: string;
 
   duracaoMs?: number;
+
+  tentativas?: number;
 
   mensagem?: string;
 
@@ -160,6 +171,12 @@ export type ResultadoOrquestradorAgronomico = {
   alertas: string[];
 
   erros: ErroProcessamentoAgronomico[];
+
+  ultimaEtapaConcluida?:
+    NomeEtapaAgronomica;
+
+  etapaComFalha?:
+    NomeEtapaAgronomica;
 
   iniciadoEm: string;
 
