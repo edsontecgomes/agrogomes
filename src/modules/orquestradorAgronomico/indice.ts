@@ -1,5 +1,6 @@
 export * from "./types";
 export * from "./typesIdempotencia";
+export * from "./typesMotoresOrquestrados";
 
 export * from "./gerarIdProcessamento";
 export * from "./gerarChaveIdempotencia";
@@ -24,9 +25,16 @@ export * from "./salvarAuditoriaProcessamento";
 
 export * from "./executarPipelineBaseEvento";
 export * from "./executarMotorCientificoOrquestrado";
+export * from "./executarMotorEstatisticoOrquestrado";
+export * from "./executarMotorAprendizagemOrquestrado";
+export * from "./executarMotorConhecimentoOrquestrado";
+export * from "./executarMotorRecomendacaoOrquestrado";
+
+export * from "./extrairContextoMotores";
+export * from "./deveProcessarMotor";
+export * from "./marcarEtapaIgnorada";
 
 export * from "./concluirEtapasPipelineBase";
-export * from "./marcarMotoresPosterioresIgnorados";
 
 export * from "./criarResultadoInicial";
 export * from "./finalizarResultadoProcessamento";
