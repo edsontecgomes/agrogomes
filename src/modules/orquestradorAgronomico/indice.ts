@@ -1,6 +1,7 @@
 export * from "./types";
 export * from "./typesIdempotencia";
 export * from "./typesMotoresOrquestrados";
+export * from "./typesSimulacao";
 
 export * from "./ordemEtapasAgronomicas";
 
@@ -48,6 +49,18 @@ export * from "./concluirEtapasPipelineBase";
 
 export * from "./criarResultadoInicial";
 export * from "./finalizarResultadoProcessamento";
+
+export * from "./criarDataSimulada";
+export * from "./gerarCoordenadaSimulada";
+export * from "./criarEntradaSimuladaBase";
+
+export * from "./gerarEventoPlantioSimulado";
+export * from "./gerarEventosChuvaSimulados";
+export * from "./gerarEventosOperacaoSimulados";
+export * from "./gerarEventoColheitaSimulado";
+
+export * from "./montarCenarioPiloto";
+export * from "./executarCenarioPiloto";
 
 export * from "./ProcessadorAgronomico";
 export * from "./processarEventoAgronomicoCompleto";
