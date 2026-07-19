@@ -1,36 +1,124 @@
-import {
-  collection,
-  doc,
-  serverTimestamp,
-  writeBatch,
-} from "firebase/firestore";
+import { salvarUEIComGDA } from "./salvarUEIComGDA";
+import { Uei } from "./types";
 
-import { db } from "../../services/firebase";
+export type ResultadoPersistenciaUEI = {
+  ueiId: string;
+  gdaId: string;
+};
 
-import { UEI } from "./UEI";
+const TAMANHO_LOTE = 20;
 
-export async function salvarUEIs(lista: UEI[]) {
+function dividirEmLotes<T>(
+  itens: T[],
+  tamanho: number,
+): T[][] {
+  const lotes: T[][] = [];
 
-  if (!lista.length) return;
+  for (
+    let indice = 0;
+    indice < itens.length;
+    indice += tamanho
+  ) {
+    lotes.push(
+      itens.slice(
+        indice,
+        indice + tamanho,
+      ),
+    );
+  }
 
-  const batch = writeBatch(db);
+  return lotes;
+}
 
-  lista.forEach((uei) => {
+function validarUEI(
+  uei: Uei,
+): void {
+  if (!uei.id) {
+    throw new Error(
+      "Foi encontrada uma UEI sem identificador.",
+    );
+  }
 
-    const ref = doc(collection(db, "ueis"), uei.id);
+  if (!uei.producerId) {
+    throw new Error(
+      `A UEI ${uei.id} não possui producerId.`,
+    );
+  }
 
-    batch.set(ref, {
+  if (!uei.farmId) {
+    throw new Error(
+      `A UEI ${uei.id} não possui farmId.`,
+    );
+  }
 
-      ...uei,
+  if (!uei.talhaoId) {
+    throw new Error(
+      `A UEI ${uei.id} não possui talhaoId.`,
+    );
+  }
 
-      criadoEm: serverTimestamp(),
+  if (!uei.codigo) {
+    throw new Error(
+      `A UEI ${uei.id} não possui código.`,
+    );
+  }
 
-      atualizadoEm: serverTimestamp(),
+  if (
+    !Number.isFinite(uei.areaHa) ||
+    uei.areaHa <= 0
+  ) {
+    throw new Error(
+      `A UEI ${uei.id} possui área inválida.`,
+    );
+  }
 
-    });
+  if (
+    !uei.geometria ||
+    uei.geometria.length < 3
+  ) {
+    throw new Error(
+      `A UEI ${uei.id} não possui geometria válida.`,
+    );
+  }
 
-  });
+  if (
+    !uei.centroide ||
+    !Number.isFinite(uei.centroide.lat) ||
+    !Number.isFinite(uei.centroide.lng)
+  ) {
+    throw new Error(
+      `A UEI ${uei.id} não possui centroide válido.`,
+    );
+  }
+}
 
-  await batch.commit();
+export async function salvarUEIs(
+  lista: Uei[],
+): Promise<ResultadoPersistenciaUEI[]> {
+  if (!lista.length) {
+    return [];
+  }
 
+  lista.forEach(validarUEI);
+
+  const resultados: ResultadoPersistenciaUEI[] = [];
+
+  const lotes = dividirEmLotes(
+    lista,
+    TAMANHO_LOTE,
+  );
+
+  for (const lote of lotes) {
+    const resultadosLote = await Promise.all(
+      lote.map((uei) =>
+        salvarUEIComGDA(uei),
+      ),
+    );
+
+    resultados.push(
+      ...resultadosLote,
+    );
+  }
+
+  return resultados;
 }
