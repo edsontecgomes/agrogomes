@@ -1,3 +1,11 @@
+export type UserRole =
+  | "admin"
+  | "produtor"
+  | "gerente"
+  | "colaborador"
+  | "operador"
+  | "system_admin";
+
 export interface Fazenda {
   id: string;
 
@@ -39,13 +47,7 @@ export interface Usuario {
 
   email?: string;
 
-  role?:
-    | "produtor"
-    | "gerente"
-    | "operador"
-    | "admin"
-    | "system_admin"
-    | string;
+  role?: UserRole | string;
 
   tipo?: string;
 
@@ -65,12 +67,13 @@ export interface Convite {
 
   nome?: string;
 
-  role?:
-    | "gerente"
-    | "operador"
-    | "colaborador"
-    | "admin"
-    | string;
+  token: string;
+
+  role: UserRole;
+
+  createdBy: string;
+
+  used: boolean;
 
   status?:
     | "pendente"
@@ -83,9 +86,9 @@ export interface Convite {
 
   criadoPor?: string;
 
-  expiresAt?: Date | string;
+  expiresAt: Date;
 
-  createdAt?: Date | string;
+  createdAt: Date;
 
   updatedAt?: Date | string;
 }

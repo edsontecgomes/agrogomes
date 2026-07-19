@@ -1,4 +1,5 @@
 export * from "./base";
+export * from "./operacional";
 export * from "./cicloAgronomico";
 export * from "./memoriaAgronomica";
 export * from "./planoManejo";
