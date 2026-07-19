@@ -2,7 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { loadGoogleMaps } from '../../services/googleMaps';
 import { auth, db } from '../../services/firebase';
 import { collection, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { Talhao } from '../../types';
+import type {
+  LatLng,
+  Talhao,
+} from "../../features/map/types/map.types";
 import { handleFirestoreError } from '../../utils/errorHandling';
 import { 
   MapPin, 
@@ -190,7 +193,7 @@ export function TalhaoMapEditor({
           content: `
             <div style="font-family: sans-serif; padding: 6px 10px; color: #1e293b;">
               <h4 style="margin: 0 0 4px 0; font-weight: 700; font-size: 14px;">${t.nome}</h4>
-              <p style="margin: 0; font-size: 11px; color: #64748b; font-weight: 600;">Área: ${t.area.toFixed(2)} ha</p>
+              <p style="margin: 0; font-size: 11px; color: #64748b; font-weight: 600;">Área: ${(t.areaHa ?? t.area ?? 0).toFixed(2)} ha</p>
             </div>
           `,
           position: e.latLng
@@ -418,11 +421,17 @@ export function TalhaoMapEditor({
     try {
       const isNew = mode === 'draw';
       const currentUser = auth.currentUser;
+      const primeiroPonto = polygonCoords[0];
+
+if (!primeiroPonto) {
+  alert("Polígono inválido.");
+  return;
+}
 
       const coordinatesArr: number[][][] = [
         [
-          ...polygonCoords.map(p => [p.lng, p.lat]),
-          [polygonCoords[0].lng, polygonCoords[0].lat]
+          ...polygonCoords.map((p) => [p.lng, p.lat]),
+    [primeiroPonto.lng, primeiroPonto.lat]
         ]
       ];
 
@@ -646,7 +655,8 @@ export function TalhaoMapEditor({
                         />
                         <h4 className="font-bold text-slate-800 text-base">{selectedTalhao.nome}</h4>
                       </div>
-                      <p className="text-xs text-slate-400 font-medium mt-1">Área total: {(selectedTalhao.areaHa !== undefined ? selectedTalhao.areaHa : selectedTalhao.area).toFixed(2)} ha</p>
+                      <p className="text-xs text-slate-400 font-medium mt-1">
+  Área total: {(selectedTalhao.areaHa ?? selectedTalhao.area ?? 0).toFixed(2)} ha</p>
                     </div>
 
                     {canManage && (

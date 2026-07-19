@@ -53,3 +53,39 @@ export interface Usuario {
 
   updatedAt?: string;
 }
+
+export interface Convite {
+  id: string;
+
+  farmId: string;
+
+  producerId?: string;
+
+  email?: string;
+
+  nome?: string;
+
+  role?:
+    | "gerente"
+    | "operador"
+    | "colaborador"
+    | "admin"
+    | string;
+
+  status?:
+    | "pendente"
+    | "aceito"
+    | "expirado"
+    | "cancelado"
+    | string;
+
+  codigo?: string;
+
+  criadoPor?: string;
+
+  expiresAt?: Date | string;
+
+  createdAt?: Date | string;
+
+  updatedAt?: Date | string;
+}

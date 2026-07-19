@@ -1,13 +1,42 @@
-import { TalhaoFirestore } from "./talhaoFirestore";
 import { TalhaoGeometria } from "../../onboarding/geometriaTalhao/tiposGeometria";
 
-export function integrarTalhaoFirestore(talhao: TalhaoFirestore): TalhaoGeometria {
+import { TalhaoFirestore } from "./talhaoFirestore";
+
+function obterCoordenadasTalhao(
+  talhao: TalhaoFirestore,
+) {
+  const coordenadas =
+    talhao.coordenadas ??
+    talhao.pontos ??
+    [];
+
+  if (coordenadas.length < 3) {
+    throw new Error(
+      `O talhão ${talhao.id} não possui coordenadas suficientes para formar um polígono.`,
+    );
+  }
+
+  return coordenadas;
+}
+
+export function integrarTalhaoFirestore(
+  talhao: TalhaoFirestore,
+): TalhaoGeometria {
+  const coordenadas = obterCoordenadasTalhao(talhao);
+
   return {
     talhaoId: talhao.id,
+
     nome: talhao.nome,
+
     limiteReal: {
-      pontos: talhao.pontos,
+      pontos: coordenadas,
     },
+
     areaTotalHa: talhao.areaHa,
+
+    areaOperacionalHa:
+      talhao.areaOperacionalHa ??
+      talhao.configuracaoGeometria?.areaOperacionalHa,
   };
 }

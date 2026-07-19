@@ -3,6 +3,8 @@ import { montarTalhaoCadastro } from "./montarTalhaoCadastro";
 import { validarTalhaoParaSalvar } from "./validarSalvarTalhao";
 import { salvarTalhaoCadastro } from "./salvarTalhao";
 
+import { pipelineCriacaoUEIs } from "../../uei/pipelineCriacaoUEIs";
+
 export async function executarFluxoCriarTalhao(params: {
   farmId: string;
   producerId?: string;
@@ -26,14 +28,44 @@ export async function executarFluxoCriarTalhao(params: {
       sucesso: false,
       mensagens: validacao.mensagens,
       talhao: null,
+      ueis: null,
     };
   }
 
-  const salvo = await salvarTalhaoCadastro(talhao, params.producerId);
+  const salvo = await salvarTalhaoCadastro(
+    talhao,
+    params.producerId,
+  );
+
+  const resultadoUEIs =
+    await pipelineCriacaoUEIs({
+      producerId: params.producerId ?? "",
+
+      farmId: params.farmId,
+
+      talhaoId: salvo.id,
+
+      nomeTalhao: params.nome,
+
+      coordenadasTalhao:
+        talhao.limiteOperacional,
+
+      areaAlvoHa: 1,
+
+      areaMinimaHa: 0.20,
+    });
 
   return {
     sucesso: true,
-    mensagens: ["Talhão cadastrado com sucesso."],
+
+    mensagens: [
+      `Talhão cadastrado com sucesso.`,
+      `${resultadoUEIs.totalUEIs} UEIs criadas.`,
+      `${resultadoUEIs.totalGDAs} GDAs criados.`,
+    ],
+
     talhao: salvo,
+
+    ueis: resultadoUEIs,
   };
 }

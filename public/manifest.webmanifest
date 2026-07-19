@@ -1,6 +1,7 @@
 {
-  "name": "Gestão Agro",
-  "short_name": "Gestão Agro",
+  "id": "/",
+  "name": "Eqtara — Sistema Operacional Agronômico",
+  "short_name": "Eqtara",
   "description": "Sistema Operacional Agronômico para gestão, campo e inteligência permanente por hectare.",
   "start_url": "/",
   "scope": "/",
@@ -8,7 +9,11 @@
   "orientation": "portrait",
   "theme_color": "#022c22",
   "background_color": "#09090b",
-  "categories": ["business", "productivity", "utilities"],
+  "categories": [
+    "business",
+    "productivity",
+    "utilities"
+  ],
   "lang": "pt-BR",
   "icons": [
     {
