@@ -1,133 +1,246 @@
-import { useState, useEffect } from 'react';
-import { 
-  collection, 
-  query, 
-  where, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  serverTimestamp,
+import { useEffect, useState } from 'react';
+import {
+  addDoc,
+  collection,
+  doc,
+  limit,
+  onSnapshot,
   orderBy,
-  limit
+  query,
+  serverTimestamp,
+  updateDoc,
+  where
 } from 'firebase/firestore';
+
 import { db } from '../services/firebase';
 import { syncService } from '../services/syncService';
-import { ChecklistTemplate, ChecklistResposta } from '../types';
+import {
+  ChecklistResposta,
+  ChecklistTemplate
+} from '../types';
 
-export function useChecklistOrdemResponse(ordemId: string | null) {
-  const [response, setResponse] = useState<ChecklistResposta | null>(null);
+export function useChecklistOrdemResponse(
+  ordemId: string | null,
+  farmId: string | null
+) {
+  const [response, setResponse] =
+    useState<ChecklistResposta | null>(null);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!ordemId) {
+    if (!ordemId || !farmId) {
+      setResponse(null);
       setLoading(false);
       return;
     }
 
-    const q = query(
+    setLoading(true);
+
+    const consulta = query(
       collection(db, 'checklist_respostas'),
+      where('farmId', '==', farmId),
       where('ordemId', '==', ordemId),
       orderBy('createdAt', 'desc'),
       limit(1)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const doc = snapshot.docs[0];
+    const unsubscribe = onSnapshot(
+      consulta,
+      snapshot => {
+        if (snapshot.empty) {
+          setResponse(null);
+          setLoading(false);
+          return;
+        }
+
+        const documento = snapshot.docs[0];
+        const data = documento.data();
+
         setResponse({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date()
+          id: documento.id,
+          ...data,
+          createdAt:
+            data.createdAt?.toDate() || new Date()
         } as ChecklistResposta);
-      } else {
+
+        setLoading(false);
+      },
+      error => {
+        console.error(
+          'Erro ao carregar resposta do checklist:',
+          error
+        );
         setResponse(null);
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    );
 
     return () => unsubscribe();
-  }, [ordemId]);
+  }, [ordemId, farmId]);
 
   return { response, loading };
 }
 
-export function useChecklistTemplates(farmId: string | null) {
-  const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
+export function useChecklistTemplates(
+  farmId: string | null
+) {
+  const [templates, setTemplates] = useState<
+    ChecklistTemplate[]
+  >([]);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!farmId) return;
+    if (!farmId) {
+      setTemplates([]);
+      setLoading(false);
+      return;
+    }
 
-    const q = query(
+    setLoading(true);
+
+    const consulta = query(
       collection(db, 'checklist_templates'),
       where('farmId', '==', farmId),
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date()
-      })) as ChecklistTemplate[];
-      setTemplates(data);
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      consulta,
+      snapshot => {
+        const dados = snapshot.docs.map(documento => {
+          const data = documento.data();
+
+          return {
+            id: documento.id,
+            ...data,
+            createdAt:
+              data.createdAt?.toDate() || new Date()
+          };
+        }) as ChecklistTemplate[];
+
+        setTemplates(dados);
+        setLoading(false);
+      },
+      error => {
+        console.error(
+          'Erro ao carregar modelos de checklist:',
+          error
+        );
+        setTemplates([]);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [farmId]);
 
-  const saveTemplate = async (template: Partial<ChecklistTemplate>) => {
+  const saveTemplate = async (
+    template: Partial<ChecklistTemplate>
+  ) => {
     if (!farmId) return;
 
     if (template.id) {
-      const { id, ...rest } = template;
-      await updateDoc(doc(db, 'checklist_templates', id), rest);
-    } else {
-      await addDoc(collection(db, 'checklist_templates'), {
+      const { id, ...restante } = template;
+
+      await updateDoc(
+        doc(db, 'checklist_templates', id),
+        restante
+      );
+
+      return;
+    }
+
+    await addDoc(
+      collection(db, 'checklist_templates'),
+      {
         ...template,
         farmId,
         createdAt: serverTimestamp(),
         ativo: true
-      });
-    }
+      }
+    );
   };
 
-  return { templates, loading, saveTemplate };
+  return {
+    templates,
+    loading,
+    saveTemplate
+  };
 }
 
-export function useChecklistResponses(farmId: string | null) {
-  const [responses, setResponses] = useState<ChecklistResposta[]>([]);
+export function useChecklistResponses(
+  farmId: string | null
+) {
+  const [responses, setResponses] = useState<
+    ChecklistResposta[]
+  >([]);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!farmId) return;
+    if (!farmId) {
+      setResponses([]);
+      setLoading(false);
+      return;
+    }
 
-    // Note: We might need a composite index for farmId + createdAt if we query by farm
-    // For now, let's just listen to all and filter if needed, 
-    // but usually responses are linked to ordens/execucoes.
-    const q = query(
+    setLoading(true);
+
+    const consulta = query(
       collection(db, 'checklist_respostas'),
+      where('farmId', '==', farmId),
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date()
-      })) as ChecklistResposta[];
-      setResponses(data);
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      consulta,
+      snapshot => {
+        const dados = snapshot.docs.map(documento => {
+          const data = documento.data();
+
+          return {
+            id: documento.id,
+            ...data,
+            createdAt:
+              data.createdAt?.toDate() || new Date()
+          };
+        }) as ChecklistResposta[];
+
+        setResponses(dados);
+        setLoading(false);
+      },
+      error => {
+        console.error(
+          'Erro ao carregar checklists respondidos:',
+          error
+        );
+        setResponses([]);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [farmId]);
 
-  const submitResponse = async (resposta: Omit<ChecklistResposta, 'id' | 'createdAt'>) => {
-    syncService.enqueue('SUBMIT_CHECKLIST', resposta);
+  const submitResponse = async (
+    resposta: Omit<
+      ChecklistResposta,
+      'id' | 'createdAt'
+    >
+  ) => {
+    if (!farmId) return;
+
+    syncService.enqueue('SUBMIT_CHECKLIST', {
+      ...resposta,
+      farmId
+    });
   };
 
-  return { responses, loading, submitResponse };
+  return {
+    responses,
+    loading,
+    submitResponse
+  };
 }

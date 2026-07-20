@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
-import { 
-  collection, 
-  query, 
-  where, 
-  onSnapshot, 
-  orderBy, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  serverTimestamp, 
+import { useState, useEffect } from 'react';
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  orderBy,
+  addDoc,
+  updateDoc,
+  doc,
+  serverTimestamp,
   getDocs,
   getDoc,
   arrayUnion
@@ -35,69 +35,95 @@ export function useOrdensServico(farmId: string | null) {
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const ordensData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          janelaInicio: data.janelaInicio?.toDate(),
-          janelaFim: data.janelaFim?.toDate(),
-        } as OrdemServico;
-      });
-      setOrdens(ordensData);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'ordens_servico');
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      snapshot => {
+        const ordensData = snapshot.docs.map(documento => {
+          const data = documento.data();
+
+          return {
+            id: documento.id,
+            ...data,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            janelaInicio: data.janelaInicio?.toDate(),
+            janelaFim: data.janelaFim?.toDate()
+          } as OrdemServico;
+        });
+
+        setOrdens(ordensData);
+        setLoading(false);
+      },
+      error => {
+        handleFirestoreError(
+          error,
+          OperationType.LIST,
+          'ordens_servico'
+        );
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [farmId]);
 
-  const criarOrdem = async (ordem: Omit<OrdemServico, 'id' | 'createdAt' | 'status' | 'createdBy' | 'farmId'>) => {
+  const criarOrdem = async (
+    ordem: Omit<
+      OrdemServico,
+      'id' | 'createdAt' | 'status' | 'createdBy' | 'farmId'
+    >
+  ) => {
     if (!farmId || !auth.currentUser) return;
-    
+
     try {
       await addDoc(collection(db, 'ordens_servico'), {
         ...ordem,
         farmId,
         status: 'pendente',
         createdBy: auth.currentUser.uid,
-        createdAt: serverTimestamp(),
+        createdAt: serverTimestamp()
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'ordens_servico');
+      handleFirestoreError(
+        error,
+        OperationType.CREATE,
+        'ordens_servico'
+      );
     }
   };
 
-  const atualizarStatusOS = async (ordemId: string, status: OrdemServico['status']) => {
+  const atualizarStatusOS = async (
+    ordemId: string,
+    status: OrdemServico['status']
+  ) => {
     try {
       await updateDoc(doc(db, 'ordens_servico', ordemId), {
         status,
-        updatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `ordens_servico/${ordemId}`);
+      handleFirestoreError(
+        error,
+        OperationType.UPDATE,
+        `ordens_servico/${ordemId}`
+      );
     }
   };
 
   const listarOrdensPorTalhao = (talhaoId: string) => {
-    return ordens.filter(o => o.talhaoId === talhaoId);
+    return ordens.filter(ordem => ordem.talhaoId === talhaoId);
   };
 
   const listarOrdensAtivas = () => {
-    return ordens.filter(o => o.status !== 'finalizada');
+    return ordens.filter(ordem => ordem.status !== 'finalizada');
   };
 
-  return { 
-    ordens, 
-    loading, 
-    criarOrdem, 
-    atualizarStatusOS, 
-    listarOrdensPorTalhao, 
-    listarOrdensAtivas 
+  return {
+    ordens,
+    loading,
+    criarOrdem,
+    atualizarStatusOS,
+    listarOrdensPorTalhao,
+    listarOrdensAtivas
   };
 }
 
@@ -112,24 +138,34 @@ export function useOrdemServico(ordemId: string | null) {
       return;
     }
 
-    const unsubscribe = onSnapshot(doc(db, 'ordens_servico', ordemId), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setOrdem({
-          id: docSnap.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          janelaInicio: data.janelaInicio?.toDate(),
-          janelaFim: data.janelaFim?.toDate(),
-        } as OrdemServico);
-      } else {
-        setOrdem(null);
+    const unsubscribe = onSnapshot(
+      doc(db, 'ordens_servico', ordemId),
+      docSnap => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+
+          setOrdem({
+            id: docSnap.id,
+            ...data,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            janelaInicio: data.janelaInicio?.toDate(),
+            janelaFim: data.janelaFim?.toDate()
+          } as OrdemServico);
+        } else {
+          setOrdem(null);
+        }
+
+        setLoading(false);
+      },
+      error => {
+        handleFirestoreError(
+          error,
+          OperationType.GET,
+          `ordens_servico/${ordemId}`
+        );
+        setLoading(false);
       }
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, `ordens_servico/${ordemId}`);
-      setLoading(false);
-    });
+    );
 
     return () => unsubscribe();
   }, [ordemId]);
@@ -137,12 +173,15 @@ export function useOrdemServico(ordemId: string | null) {
   return { ordem, loading };
 }
 
-export function useExecucoesServico(ordemId: string | null) {
+export function useExecucoesServico(
+  ordemId: string | null,
+  farmId: string | null
+) {
   const [execucoes, setExecucoes] = useState<ExecucaoServico[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!ordemId || !auth.currentUser) {
+    if (!ordemId || !farmId || !auth.currentUser) {
       setExecucoes([]);
       setLoading(false);
       return;
@@ -150,101 +189,146 @@ export function useExecucoesServico(ordemId: string | null) {
 
     const q = query(
       collection(db, 'execucoes_servico'),
+      where('farmId', '==', farmId),
       where('ordemId', '==', ordemId),
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const execucoesData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          dataInicio: data.dataInicio?.toDate(),
-          dataFim: data.dataFim?.toDate(),
-          createdAt: data.createdAt?.toDate() || new Date(),
-        } as ExecucaoServico;
-      });
-      setExecucoes(execucoesData);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'execucoes_servico');
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      snapshot => {
+        const execucoesData = snapshot.docs.map(documento => {
+          const data = documento.data();
+
+          return {
+            id: documento.id,
+            ...data,
+            dataInicio: data.dataInicio?.toDate(),
+            dataFim: data.dataFim?.toDate(),
+            createdAt: data.createdAt?.toDate() || new Date()
+          } as ExecucaoServico;
+        });
+
+        setExecucoes(execucoesData);
+        setLoading(false);
+      },
+      error => {
+        handleFirestoreError(
+          error,
+          OperationType.LIST,
+          'execucoes_servico'
+        );
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
-  }, [ordemId]);
+  }, [ordemId, farmId]);
 
-  const updateOSStatusFromExecutions = async (ordemId: string) => {
+  const updateOSStatusFromExecutions = async (
+    ordemIdAtual: string
+  ) => {
+    if (!farmId) return;
+
     const q = query(
       collection(db, 'execucoes_servico'),
-      where('ordemId', '==', ordemId)
+      where('farmId', '==', farmId),
+      where('ordemId', '==', ordemIdAtual)
     );
+
     const snapshot = await getDocs(q);
-    const execs = snapshot.docs.map(d => d.data() as ExecucaoServico);
-    
-    const osRef = doc(db, 'ordens_servico', ordemId);
+    const execucoesDaOrdem = snapshot.docs.map(
+      documento => documento.data() as ExecucaoServico
+    );
+
+    const osRef = doc(db, 'ordens_servico', ordemIdAtual);
     const osSnap = await getDoc(osRef);
+
     if (!osSnap.exists()) return;
+
     const osData = osSnap.data() as OrdemServico;
 
-    // "A OS NÃO deve ser finalizada automaticamente ao finalizar uma execução."
-    // If OS is already 'finalizada', don't change it back unless manually requested?
-    // Requirement: "Quando existir pelo menos uma execução ativa: status = em_execucao"
-    // Requirement: "Quando existir pelo menos uma execução finalizada mas ainda não concluída totalmente: status = parcial"
-    
     if (osData.status === 'finalizada') return;
 
-    const hasActive = execs.some(e => e.status === 'em_execucao');
-    const hasFinished = execs.some(e => e.status === 'finalizada');
+    const possuiExecucaoAtiva = execucoesDaOrdem.some(
+      execucao => execucao.status === 'em_execucao'
+    );
 
-    let nextStatus: OrdemServico['status'] = 'pendente';
-    if (hasActive) {
-      nextStatus = 'em_execucao';
-    } else if (hasFinished) {
-      nextStatus = 'parcial';
+    const possuiExecucaoFinalizada = execucoesDaOrdem.some(
+      execucao => execucao.status === 'finalizada'
+    );
+
+    let proximoStatus: OrdemServico['status'] = 'pendente';
+
+    if (possuiExecucaoAtiva) {
+      proximoStatus = 'em_execucao';
+    } else if (possuiExecucaoFinalizada) {
+      proximoStatus = 'parcial';
     }
 
-    if (osData.status !== nextStatus) {
-      await updateDoc(osRef, { status: nextStatus });
+    if (osData.status !== proximoStatus) {
+      await updateDoc(osRef, {
+        status: proximoStatus
+      });
     }
   };
 
-  const iniciarExecucao = async (farmId: string, talhaoId: string, location?: { lat: number, lng: number, accuracy?: number }) => {
+  const iniciarExecucao = async (
+    farmIdExecucao: string,
+    talhaoId: string,
+    location?: {
+      lat: number;
+      lng: number;
+      accuracy?: number;
+    }
+  ) => {
     if (!ordemId || !auth.currentUser) return;
 
     try {
-      // Get current user name for denormalization
       let operadorNome = 'Operador';
+
       try {
-        const userDoc = await getDoc(doc(db, 'usuarios', auth.currentUser.uid));
+        const userDoc = await getDoc(
+          doc(db, 'usuarios', auth.currentUser.uid)
+        );
+
         const userData = userDoc.data();
-        operadorNome = userData?.nome || auth.currentUser.displayName || 'Operador';
-      } catch (e) {
+
+        operadorNome =
+          userData?.nome ||
+          auth.currentUser.displayName ||
+          'Operador';
+      } catch {
         console.warn('Using default operator name (offline).');
       }
 
-      // Get equipment details from order
       let maquinaId = null;
       let maquinaNome = null;
       let implementoId = null;
       let implementoNome = null;
+
       try {
-        const orderSnap = await getDoc(doc(db, 'ordens_servico', ordemId));
+        const orderSnap = await getDoc(
+          doc(db, 'ordens_servico', ordemId)
+        );
+
         if (orderSnap.exists()) {
           const orderData = orderSnap.data();
+
           maquinaId = orderData.maquinaId || null;
           maquinaNome = orderData.maquinaNome || null;
           implementoId = orderData.implementoId || null;
           implementoNome = orderData.implementoNome || null;
         }
-      } catch (err) {
-        console.warn('Could not retrieve order details for equipment mapping:', err);
+      } catch {
+        console.warn(
+          'Could not retrieve order details for equipment mapping.'
+        );
       }
 
       const payload = {
         ordemId,
-        farmId,
+        farmId: farmIdExecucao,
         talhaoId,
         operadorId: auth.currentUser.uid,
         operadorNome,
@@ -255,96 +339,157 @@ export function useExecucoesServico(ordemId: string | null) {
         maquinaId,
         maquinaNome,
         implementoId,
-        implementoNome,
+        implementoNome
       };
 
       if (!navigator.onLine) {
-        const tempId = 'offline_' + Math.random().toString(36).substr(2, 9);
+        const tempId =
+          'offline_' +
+          Math.random().toString(36).substring(2, 11);
+
         syncService.enqueue('CREATE_EXECUCAO', payload);
-        // We'll have a problem here because onSnapshot won't show it immediately 
-        // unless we use a custom state for offline execs.
-        // For now, let's assume we want to push to firebase if possible.
+
         return tempId;
       }
 
-      const docRef = await addDoc(collection(db, 'execucoes_servico'), {
-        ...payload,
-        dataInicio: serverTimestamp(),
-        createdAt: serverTimestamp(),
-      });
+      const docRef = await addDoc(
+        collection(db, 'execucoes_servico'),
+        {
+          ...payload,
+          dataInicio: serverTimestamp(),
+          createdAt: serverTimestamp()
+        }
+      );
 
       await updateOSStatusFromExecutions(ordemId);
+
       return docRef.id;
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'execucoes_servico');
+      handleFirestoreError(
+        error,
+        OperationType.CREATE,
+        'execucoes_servico'
+      );
     }
   };
 
   const pausarExecucao = async (execucaoId: string) => {
     try {
       if (!navigator.onLine) {
-        syncService.enqueue('UPDATE_EXECUCAO', { id: execucaoId, status: 'pausada' });
+        syncService.enqueue('UPDATE_EXECUCAO', {
+          id: execucaoId,
+          status: 'pausada'
+        });
         return;
       }
-      await updateDoc(doc(db, 'execucoes_servico', execucaoId), {
-        status: 'pausada',
-        updatedAt: serverTimestamp(),
-      });
+
+      await updateDoc(
+        doc(db, 'execucoes_servico', execucaoId),
+        {
+          status: 'pausada',
+          updatedAt: serverTimestamp()
+        }
+      );
+
       await updateOSStatusFromExecutions(ordemId!);
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `execucoes_servico/${execucaoId}`);
+      handleFirestoreError(
+        error,
+        OperationType.UPDATE,
+        `execucoes_servico/${execucaoId}`
+      );
     }
   };
 
-  const finalizarExecucao = async (execucaoId: string, location?: { lat: number, lng: number, accuracy?: number }) => {
+  const finalizarExecucao = async (
+    execucaoId: string,
+    location?: {
+      lat: number;
+      lng: number;
+      accuracy?: number;
+    }
+  ) => {
     try {
       if (!navigator.onLine) {
-        syncService.enqueue('UPDATE_EXECUCAO', { 
-          id: execucaoId, 
+        syncService.enqueue('UPDATE_EXECUCAO', {
+          id: execucaoId,
           status: 'finalizada',
           dataFim: Date.now(),
           locationEnd: location || null
         });
         return;
       }
-      await updateDoc(doc(db, 'execucoes_servico', execucaoId), {
-        status: 'finalizada',
-        dataFim: serverTimestamp(),
-        locationEnd: location || null,
-        updatedAt: serverTimestamp(),
-      });
+
+      await updateDoc(
+        doc(db, 'execucoes_servico', execucaoId),
+        {
+          status: 'finalizada',
+          dataFim: serverTimestamp(),
+          locationEnd: location || null,
+          updatedAt: serverTimestamp()
+        }
+      );
+
       await updateOSStatusFromExecutions(ordemId!);
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `execucoes_servico/${execucaoId}`);
+      handleFirestoreError(
+        error,
+        OperationType.UPDATE,
+        `execucoes_servico/${execucaoId}`
+      );
     }
   };
 
-  const adicionarPontoPath = async (execucaoId: string, ponto: { lat: number, lng: number, timestamp: number, accuracy?: number }) => {
+  const adicionarPontoPath = async (
+    execucaoId: string,
+    ponto: {
+      lat: number;
+      lng: number;
+      timestamp: number;
+      accuracy?: number;
+    }
+  ) => {
     try {
       if (!navigator.onLine) {
-        syncService.enqueue('ADD_PATH_POINT', { execId: execucaoId, points: [ponto] });
+        syncService.enqueue('ADD_PATH_POINT', {
+          execId: execucaoId,
+          points: [ponto]
+        });
         return;
       }
-      await updateDoc(doc(db, 'execucoes_servico', execucaoId), {
-        path: arrayUnion(ponto),
-      });
+
+      await updateDoc(
+        doc(db, 'execucoes_servico', execucaoId),
+        {
+          path: arrayUnion(ponto)
+        }
+      );
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `execucoes_servico/${execucaoId}`);
+      handleFirestoreError(
+        error,
+        OperationType.UPDATE,
+        `execucoes_servico/${execucaoId}`
+      );
     }
   };
 
-  return { 
-    execucoes, 
-    loading, 
-    iniciarExecucao, 
-    pausarExecucao, 
-    finalizarExecucao, 
-    adicionarPontoPath 
+  return {
+    execucoes,
+    loading,
+    iniciarExecucao,
+    pausarExecucao,
+    finalizarExecucao,
+    adicionarPontoPath
   };
 }
 
-export function useMinhasExecucoesAtivas(farmId: string | null) {
-  const [execucoesAtivas, setExecucoesAtivas] = useState<ExecucaoServico[]>([]);
+export function useMinhasExecucoesAtivas(
+  farmId: string | null
+) {
+  const [execucoesAtivas, setExecucoesAtivas] = useState<
+    ExecucaoServico[]
+  >([]);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -356,27 +501,37 @@ export function useMinhasExecucoesAtivas(farmId: string | null) {
 
     const q = query(
       collection(db, 'execucoes_servico'),
+      where('farmId', '==', farmId),
       where('operadorId', '==', auth.currentUser.uid),
       where('status', 'in', ['em_execucao', 'pausada'])
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const execucoesData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          dataInicio: data.dataInicio?.toDate(),
-          createdAt: data.createdAt?.toDate() || new Date(),
-        } as ExecucaoServico;
-      });
-      
-      setExecucoesAtivas(execucoesData);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'execucoes_servico');
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      snapshot => {
+        const execucoesData = snapshot.docs.map(documento => {
+          const data = documento.data();
+
+          return {
+            id: documento.id,
+            ...data,
+            dataInicio: data.dataInicio?.toDate(),
+            createdAt: data.createdAt?.toDate() || new Date()
+          } as ExecucaoServico;
+        });
+
+        setExecucoesAtivas(execucoesData);
+        setLoading(false);
+      },
+      error => {
+        handleFirestoreError(
+          error,
+          OperationType.LIST,
+          'execucoes_servico'
+        );
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [farmId]);
@@ -384,8 +539,13 @@ export function useMinhasExecucoesAtivas(farmId: string | null) {
   return { execucoesAtivas, loading };
 }
 
-export function useTodasExecucoesServico(farmId: string | null) {
-  const [execucoes, setExecucoes] = useState<ExecucaoServico[]>([]);
+export function useTodasExecucoesServico(
+  farmId: string | null
+) {
+  const [execucoes, setExecucoes] = useState<
+    ExecucaoServico[]
+  >([]);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -401,27 +561,36 @@ export function useTodasExecucoesServico(farmId: string | null) {
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const execucoesData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          dataInicio: data.dataInicio?.toDate(),
-          dataFim: data.dataFim?.toDate(),
-          createdAt: data.createdAt?.toDate() || new Date(),
-        } as ExecucaoServico;
-      });
-      setExecucoes(execucoesData);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'execucoes_servico');
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      snapshot => {
+        const execucoesData = snapshot.docs.map(documento => {
+          const data = documento.data();
+
+          return {
+            id: documento.id,
+            ...data,
+            dataInicio: data.dataInicio?.toDate(),
+            dataFim: data.dataFim?.toDate(),
+            createdAt: data.createdAt?.toDate() || new Date()
+          } as ExecucaoServico;
+        });
+
+        setExecucoes(execucoesData);
+        setLoading(false);
+      },
+      error => {
+        handleFirestoreError(
+          error,
+          OperationType.LIST,
+          'execucoes_servico'
+        );
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [farmId]);
 
   return { execucoes, loading };
 }
-

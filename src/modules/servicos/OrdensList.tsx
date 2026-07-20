@@ -239,6 +239,7 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
       // Adjust overall Service Order status
       const q = query(
         collection(db, 'execucoes_servico'),
+        where('farmId', '==', farmId),
         where('ordemId', '==', ordem.id),
         where('status', '==', 'em_execucao')
       );
