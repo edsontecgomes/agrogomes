@@ -1,6 +1,23 @@
 {
   "indexes": [
     {
+      "collectionGroup": "abastecimentos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "dataAbastecimento", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "abastecimentos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "maquinaId", "order": "ASCENDING" },
+        { "fieldPath": "dataAbastecimento", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "caderno_tecnico",
       "queryScope": "COLLECTION",
       "fields": [
@@ -57,6 +74,14 @@
       "fields": [
         { "fieldPath": "farmId", "order": "ASCENDING" },
         { "fieldPath": "data", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "manutencoes_executadas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "dataExecucao", "order": "DESCENDING" }
       ]
     },
     {
@@ -192,6 +217,22 @@
         { "fieldPath": "farmId", "order": "ASCENDING" },
         { "fieldPath": "equipamentoId", "order": "ASCENDING" },
         { "fieldPath": "ativo", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notificacoes_operacionais",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "segmentos_execucao",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "farmId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     }
   ],
