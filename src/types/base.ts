@@ -41,6 +41,8 @@ export interface Usuario {
 
   primaryFarmId?: string;
 
+  conviteId?: string;
+
   nome?: string;
 
   name?: string;

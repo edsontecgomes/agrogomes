@@ -1,84 +1,149 @@
-import React, { useEffect, useState } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
-import { collection, query, where, getDocs, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../../services/firebase';
-import { handleFirestoreError } from '../../utils/errorHandling';
-import { UserRole } from '../../types';
+import React, { useEffect, useState } from "react";
+import { Html5QrcodeScanner } from "html5-qrcode";
+import {
+  doc,
+  getDoc,
+  serverTimestamp,
+  writeBatch,
+} from "firebase/firestore";
+import { auth, db } from "../../services/firebase";
 
 interface QRScannerProps {
   onSuccess: (farmId: string) => void;
   onCancel: () => void;
 }
 
-export function QRScanner({ onSuccess, onCancel }: QRScannerProps) {
+export function QRScanner({
+  onSuccess,
+  onCancel,
+}: QRScannerProps) {
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     const scanner = new Html5QrcodeScanner(
-      'qr-reader',
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      /* verbose= */ false
+      "qr-reader",
+      {
+        fps: 10,
+        qrbox: {
+          width: 250,
+          height: 250,
+        },
+      },
+      false,
     );
 
-    scanner.render(async (decodedText) => {
-      // Stop scanning once we get a result
-      scanner.clear();
-      setProcessing(true);
-      setError(null);
+    scanner.render(
+      async (decodedText) => {
+        await scanner.clear();
 
-      try {
-        if (!auth.currentUser) throw new Error('Usuário não autenticado');
+        setProcessing(true);
+        setError(null);
 
-        // Buscar convite pelo token
-        const q = query(
-          collection(db, 'convites'),
-          where('token', '==', decodedText)
-        );
-        const querySnapshot = await getDocs(q);
+        try {
+          if (!auth.currentUser) {
+            throw new Error("Usuário não autenticado.");
+          }
 
-        if (querySnapshot.empty) {
-          throw new Error('Convite inválido ou não encontrado.');
+          const token = decodedText.trim();
+
+          const conviteRef = doc(
+            db,
+            "convites",
+            token,
+          );
+
+          const conviteDoc = await getDoc(
+            conviteRef,
+          );
+
+          if (!conviteDoc.exists()) {
+            throw new Error(
+              "Convite inválido ou não encontrado.",
+            );
+          }
+
+          const convite = conviteDoc.data();
+
+          if (
+            !convite.expiresAt?.toDate ||
+            convite.expiresAt.toDate() < new Date()
+          ) {
+            throw new Error(
+              "Este convite expirou ou possui data inválida.",
+            );
+          }
+
+          if (convite.used) {
+            throw new Error(
+              "Este convite já foi utilizado.",
+            );
+          }
+
+          if (
+            convite.role !== "gerente" &&
+            convite.role !== "colaborador" &&
+            convite.role !== "operador"
+          ) {
+            throw new Error(
+              "O perfil definido neste convite é inválido.",
+            );
+          }
+
+          if (
+            typeof convite.farmId !== "string" ||
+            !convite.farmId
+          ) {
+            throw new Error(
+              "O convite não possui uma fazenda válida.",
+            );
+          }
+
+          const userId = auth.currentUser.uid;
+
+          const userRef = doc(
+            db,
+            "usuarios",
+            userId,
+          );
+
+          const batch = writeBatch(db);
+
+          batch.set(userRef, {
+            id: userId,
+            email: auth.currentUser.email ?? "",
+            nome:
+              auth.currentUser.displayName ??
+              "Usuário",
+            role: convite.role,
+            farmId: convite.farmId,
+            conviteId: conviteDoc.id,
+            createdAt: serverTimestamp(),
+          });
+
+          batch.update(conviteRef, {
+            used: true,
+            usedBy: userId,
+            usedAt: serverTimestamp(),
+          });
+
+          await batch.commit();
+
+          onSuccess(convite.farmId);
+        } catch (caughtError) {
+          const message =
+            caughtError instanceof Error
+              ? caughtError.message
+              : "Erro ao processar convite.";
+
+          setError(message);
+          setProcessing(false);
         }
-
-        const conviteDoc = querySnapshot.docs[0];
-        const convite = conviteDoc.data();
-
-        // Validar se não expirou
-        if (convite.expiresAt.toDate() < new Date()) {
-          throw new Error('Este convite expirou.');
-        }
-
-        // Validar se não foi usado
-        if (convite.used) {
-          throw new Error('Este convite já foi utilizado.');
-        }
-
-        // Criar usuário automaticamente
-        const userId = auth.currentUser.uid;
-        const userRef = doc(db, 'usuarios', userId);
-        
-        await setDoc(userRef, {
-          email: auth.currentUser.email || '',
-          nome: auth.currentUser.displayName || 'Usuário',
-          role: convite.role,
-          farmId: convite.farmId,
-          createdAt: serverTimestamp()
-        });
-
-        // Marcar convite como usado
-        await updateDoc(doc(db, 'convites', conviteDoc.id), {
-          used: true
-        });
-
-        onSuccess(convite.farmId);
-      } catch (err: any) {
-        setError(err.message || 'Erro ao processar convite.');
-        setProcessing(false);
-      }
-    }, (err) => {
-      // Ignore scan errors (happens when no QR code is in view)
-    });
+      },
+      () => {
+        // Leituras sem QR válido são ignoradas.
+      },
+    );
 
     return () => {
       scanner.clear().catch(console.error);
@@ -86,28 +151,37 @@ export function QRScanner({ onSuccess, onCancel }: QRScannerProps) {
   }, [onSuccess]);
 
   return (
-    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 max-w-md w-full mx-auto">
-      <h2 className="text-xl font-bold text-slate-900 mb-4 text-center">Escanear Convite</h2>
-      
+    <div className="mx-auto w-full max-w-md rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+      <h2 className="mb-4 text-center text-xl font-bold text-slate-900">
+        Escanear Convite
+      </h2>
+
       {error && (
-        <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-xl border border-red-100">
+        <div className="mb-4 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
       {processing ? (
         <div className="flex flex-col items-center justify-center py-12">
-          <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin mb-4"></div>
-          <p className="text-slate-600">Processando convite...</p>
+          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-600" />
+
+          <p className="text-slate-600">
+            Processando convite...
+          </p>
         </div>
       ) : (
-        <div id="qr-reader" className="w-full overflow-hidden rounded-xl border-2 border-slate-100 mb-4"></div>
+        <div
+          id="qr-reader"
+          className="mb-4 w-full overflow-hidden rounded-xl border-2 border-slate-100"
+        />
       )}
 
       <button
+        type="button"
         onClick={onCancel}
         disabled={processing}
-        className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl transition-colors disabled:opacity-50"
+        className="w-full rounded-xl bg-slate-100 px-4 py-3 font-medium text-slate-700 transition-colors hover:bg-slate-200 disabled:opacity-50"
       >
         Cancelar
       </button>
