@@ -1,36 +1,53 @@
-import { serverTimestamp } from "firebase/firestore";
-import { TalhaoCadastro } from "./talhaoCadastro";
+import {
+  serverTimestamp,
+} from "firebase/firestore";
+
+import {
+  TalhaoCadastro,
+} from "./talhaoCadastro";
 
 export function criarPayloadTalhaoFirestore(
   talhao: TalhaoCadastro,
-  producerId?: string,
+  producerId: string,
 ) {
+  const producerIdNormalizado =
+    producerId.trim();
+
+  if (!producerIdNormalizado) {
+    throw new Error(
+      "Não foi possível criar o talhão: producerId não informado.",
+    );
+  }
+
   return {
     farmId: talhao.farmId,
 
-    producerId: producerId ?? null,
+    producerId:
+      producerIdNormalizado,
 
     nome: talhao.nome,
 
     /**
-     * Limite original do talhão.
+     * Limite físico original.
      */
-    coordenadas: talhao.coordenadas,
+    coordenadas:
+      talhao.coordenadas,
 
     /**
      * Compatibilidade temporária.
      */
-    pontos: talhao.coordenadas,
+    pontos:
+      talhao.coordenadas,
 
     /**
-     * Novo contrato oficial.
-     * Será utilizado pelo Grid,
-     * UEIs e Motor Científico.
+     * Limite interno utilizado pelas
+     * UEIs e pelo motor científico.
      */
     limiteOperacional:
       talhao.limiteOperacional,
 
-    areaHa: talhao.areaHa,
+    areaHa:
+      talhao.areaHa,
 
     areaOperacionalHa:
       talhao.areaOperacionalHa,

@@ -14,6 +14,10 @@ import {
 } from "./cadastro/fluxoCriarTalhao";
 
 import {
+  TalhaoDesenhoFullscreen,
+} from "./editorV2/TalhaoDesenhoFullscreen";
+
+import {
   TalhaoFormV2,
 } from "./editorV2/TalhaoFormV2";
 
@@ -52,7 +56,6 @@ export interface TalhaoEditorV2Props {
 function copiarDraftInicial(): TalhaoDraft {
   return {
     ...TALHAO_DRAFT_INICIAL,
-
     coordenadas: [],
   };
 }
@@ -93,6 +96,11 @@ export function TalhaoEditorV2({
       null,
     );
 
+  const [
+    desenhoTelaCheia,
+    setDesenhoTelaCheia,
+  ] = useState(false);
+
   const podeGerenciar =
     userRole === "produtor" ||
     userRole === "admin" ||
@@ -111,18 +119,14 @@ export function TalhaoEditorV2({
     talhaoDraftValido(draft);
 
   const atualizarNome =
-    useCallback(
-      (nome: string) => {
-        setDraft((atual) => ({
-          ...atual,
+    useCallback((nome: string) => {
+      setDraft((atual) => ({
+        ...atual,
+        nome,
+      }));
 
-          nome,
-        }));
-
-        setMensagem(null);
-      },
-      [],
-    );
+      setMensagem(null);
+    }, []);
 
   const atualizarBordadura =
     useCallback(
@@ -132,7 +136,6 @@ export function TalhaoEditorV2({
       ) => {
         setDraft((atual) => ({
           ...atual,
-
           bordaduraPercentual,
         }));
 
@@ -148,7 +151,6 @@ export function TalhaoEditorV2({
       ) => {
         setDraft((atual) => ({
           ...atual,
-
           coordenadas,
         }));
 
@@ -158,31 +160,26 @@ export function TalhaoEditorV2({
     );
 
   const atualizarArea =
-    useCallback(
-      (areaHa: number) => {
-        setDraft((atual) => {
-          if (
-            atual.areaHa === areaHa
-          ) {
-            return atual;
-          }
+    useCallback((areaHa: number) => {
+      setDraft((atual) => {
+        if (
+          atual.areaHa === areaHa
+        ) {
+          return atual;
+        }
 
-          return {
-            ...atual,
-
-            areaHa,
-          };
-        });
-      },
-      [],
-    );
+        return {
+          ...atual,
+          areaHa,
+        };
+      });
+    }, []);
 
   const iniciarDesenho =
     useCallback(() => {
       if (!podeGerenciar) {
         setMensagem({
           tipo: "erro",
-
           texto:
             "Seu perfil não possui permissão para criar talhões.",
         });
@@ -193,7 +190,6 @@ export function TalhaoEditorV2({
       if (!producerIdNormalizado) {
         setMensagem({
           tipo: "erro",
-
           texto:
             "Não foi possível identificar o produtor responsável pela fazenda.",
         });
@@ -202,10 +198,10 @@ export function TalhaoEditorV2({
       }
 
       setMode("desenho");
+      setDesenhoTelaCheia(true);
 
       setMensagem({
         tipo: "informacao",
-
         texto:
           "Clique no mapa para adicionar os vértices do talhão.",
       });
@@ -236,9 +232,7 @@ export function TalhaoEditorV2({
     useCallback(() => {
       setDraft((atual) => ({
         ...atual,
-
         coordenadas: [],
-
         areaHa: 0,
       }));
 
@@ -247,21 +241,49 @@ export function TalhaoEditorV2({
 
   const cancelar =
     useCallback(() => {
+      setDesenhoTelaCheia(false);
+
       setDraft(
         copiarDraftInicial(),
       );
 
       setMode("visualizacao");
-
       setMensagem(null);
     }, []);
+
+  const avancarParaDados =
+    useCallback(() => {
+      if (
+        draft.coordenadas.length < 3 ||
+        draft.areaHa <= 0
+      ) {
+        setMensagem({
+          tipo: "aviso",
+          texto:
+            "Marque pelo menos três pontos para formar um limite válido.",
+        });
+
+        return;
+      }
+
+      setDesenhoTelaCheia(false);
+      setMode("visualizacao");
+
+      setMensagem({
+        tipo: "informacao",
+        texto:
+          "Limite definido. Agora informe o nome e a bordadura do talhão.",
+      });
+    }, [
+      draft.areaHa,
+      draft.coordenadas.length,
+    ]);
 
   const salvar =
     useCallback(async () => {
       if (!podeGerenciar) {
         setMensagem({
           tipo: "erro",
-
           texto:
             "Seu perfil não possui permissão para criar talhões.",
         });
@@ -269,13 +291,12 @@ export function TalhaoEditorV2({
         return;
       }
 
-      const producerIdValido =
-        producerId?.trim();
+      const producerIdValido: string =
+        producerId?.trim() ?? "";
 
       if (!producerIdValido) {
         setMensagem({
           tipo: "erro",
-
           texto:
             "O producerId da fazenda não foi localizado.",
         });
@@ -286,7 +307,6 @@ export function TalhaoEditorV2({
       if (!talhaoDraftValido(draft)) {
         setMensagem({
           tipo: "aviso",
-
           texto:
             "Informe o nome e desenhe um polígono válido com pelo menos três pontos.",
         });
@@ -298,7 +318,6 @@ export function TalhaoEditorV2({
 
       setMensagem({
         tipo: "informacao",
-
         texto:
           "Criando o talhão e sua estrutura agronômica...",
       });
@@ -328,7 +347,7 @@ export function TalhaoEditorV2({
           !resultado.sucesso ||
           !resultado.talhao
         ) {
-          setMode("desenho");
+          setMode("visualizacao");
 
           setMensagem({
             tipo: "erro",
@@ -374,11 +393,10 @@ export function TalhaoEditorV2({
           error,
         );
 
-        setMode("desenho");
+        setMode("visualizacao");
 
         setMensagem({
           tipo: "erro",
-
           texto:
             mensagemErro(error),
         });
@@ -410,110 +428,136 @@ export function TalhaoEditorV2({
     descricaoPermissao;
 
   return (
-    <section className="space-y-5">
-      <div className="flex flex-col justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
-        <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-black text-slate-900">
-              Editor de Talhões V2
-            </h2>
+    <>
+      <section className="space-y-5">
+        <div className="flex flex-col justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
+          <div>
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-black text-slate-900">
+                Editor de Talhões V2
+              </h2>
 
-            <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-              Pipeline científico
-            </span>
-          </div>
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                Pipeline científico
+              </span>
+            </div>
 
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
-            O limite original gera automaticamente a área operacional, as UEIs georreferenciadas e seus GDAs.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-          <div className="rounded-xl bg-slate-50 px-4 py-3">
-            <p className="font-black uppercase tracking-widest text-slate-400">
-              Talhões
-            </p>
-
-            <p className="mt-1 text-lg font-black text-slate-800">
-              {talhoes.length}
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
+              O limite original gera automaticamente a área operacional, as UEIs georreferenciadas e seus GDAs.
             </p>
           </div>
 
-          <div className="rounded-xl bg-slate-50 px-4 py-3">
-            <p className="font-black uppercase tracking-widest text-slate-400">
-              Bordadura
-            </p>
+          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 px-4 py-3">
+              <p className="font-black uppercase tracking-widest text-slate-400">
+                Talhões
+              </p>
 
-            <p className="mt-1 text-lg font-black text-slate-800">
-              {draft.bordaduraPercentual}%
-            </p>
+              <p className="mt-1 text-lg font-black text-slate-800">
+                {talhoes.length}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 px-4 py-3">
+              <p className="font-black uppercase tracking-widest text-slate-400">
+                Bordadura
+              </p>
+
+              <p className="mt-1 text-lg font-black text-slate-800">
+                {draft.bordaduraPercentual}%
+              </p>
+            </div>
+
+            <div className="col-span-2 rounded-xl bg-emerald-50 px-4 py-3 sm:col-span-1">
+              <p className="font-black uppercase tracking-widest text-emerald-600">
+                Área
+              </p>
+
+              <p className="mt-1 text-lg font-black text-emerald-800">
+                {draft.areaHa.toFixed(2)} ha
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+          <div className="lg:col-span-4">
+            <TalhaoFormV2
+              draft={draft}
+              loading={loading}
+              podeSalvar={podeSalvar}
+              mensagem={
+                mensagemExibida
+              }
+              onChangeNome={
+                atualizarNome
+              }
+              onChangeBordadura={
+                atualizarBordadura
+              }
+              onIniciarDesenho={
+                iniciarDesenho
+              }
+              onDesfazerPonto={
+                desfazerPonto
+              }
+              onLimparDesenho={
+                limparDesenho
+              }
+              onCancelar={cancelar}
+              onSalvar={salvar}
+            />
           </div>
 
-          <div className="col-span-2 rounded-xl bg-emerald-50 px-4 py-3 sm:col-span-1">
-            <p className="font-black uppercase tracking-widest text-emerald-600">
-              Área
-            </p>
-
-            <p className="mt-1 text-lg font-black text-emerald-800">
-              {draft.areaHa.toFixed(2)} ha
-            </p>
+          <div className="lg:col-span-8">
+            <TalhaoMapCanvasV2
+              mode={mode}
+              talhoes={talhoes}
+              selectedTalhao={
+                selectedTalhao
+              }
+              coordenadasDesenho={
+                draft.coordenadas
+              }
+              onSelectTalhao={
+                onSelectTalhao
+              }
+              onChangeCoordenadas={
+                atualizarCoordenadas
+              }
+              onAreaCalculada={
+                atualizarArea
+              }
+            />
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <div className="lg:col-span-4">
-          <TalhaoFormV2
-            draft={draft}
-            loading={loading}
-            podeSalvar={podeSalvar}
-            mensagem={mensagemExibida}
-            onChangeNome={
-              atualizarNome
-            }
-            onChangeBordadura={
-              atualizarBordadura
-            }
-            onIniciarDesenho={
-              iniciarDesenho
-            }
-            onDesfazerPonto={
-              desfazerPonto
-            }
-            onLimparDesenho={
-              limparDesenho
-            }
-            onCancelar={
-              cancelar
-            }
-            onSalvar={
-              salvar
-            }
-          />
-        </div>
-
-        <div className="lg:col-span-8">
-          <TalhaoMapCanvasV2
-            mode={mode}
-            talhoes={talhoes}
-            selectedTalhao={
-              selectedTalhao
-            }
-            coordenadasDesenho={
-              draft.coordenadas
-            }
-            onSelectTalhao={
-              onSelectTalhao
-            }
-            onChangeCoordenadas={
-              atualizarCoordenadas
-            }
-            onAreaCalculada={
-              atualizarArea
-            }
-          />
-        </div>
-      </div>
-    </section>
+      {desenhoTelaCheia && (
+        <TalhaoDesenhoFullscreen
+          talhoes={talhoes}
+          coordenadas={
+            draft.coordenadas
+          }
+          areaHa={draft.areaHa}
+          onChangeCoordenadas={
+            atualizarCoordenadas
+          }
+          onAreaCalculada={
+            atualizarArea
+          }
+          onDesfazer={
+            desfazerPonto
+          }
+          onLimpar={
+            limparDesenho
+          }
+          onCancelar={cancelar}
+          onAvancar={
+            avancarParaDados
+          }
+        />
+      )}
+    </>
   );
 }

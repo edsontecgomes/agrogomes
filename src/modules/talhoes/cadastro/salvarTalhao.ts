@@ -1,17 +1,87 @@
-import { addDoc, collection } from "firebase/firestore";
-import { db } from "../../../services/firebase";
-import { TalhaoCadastro } from "./talhaoCadastro";
-import { criarPayloadTalhaoFirestore } from "./talhaoFirestorePayload";
+import {
+  addDoc,
+  collection,
+} from "firebase/firestore";
+
+import type {
+  Talhao,
+} from "../../../features/map/types/map.types";
+
+import {
+  db,
+} from "../../../services/firebase";
+
+import type {
+  TalhaoCadastro,
+} from "./talhaoCadastro";
+
+import {
+  criarPayloadTalhaoFirestore,
+} from "./talhaoFirestorePayload";
 
 export async function salvarTalhaoCadastro(
   talhao: TalhaoCadastro,
-  producerId?: string,
-) {
-  const payload = criarPayloadTalhaoFirestore(talhao, producerId);
-  const ref = await addDoc(collection(db, "talhoes"), payload);
+  producerId: string,
+): Promise<Talhao> {
+  const payload =
+    criarPayloadTalhaoFirestore(
+      talhao,
+      producerId,
+    );
+
+  const ref = await addDoc(
+    collection(db, "talhoes"),
+    payload,
+  );
 
   return {
-    id: ref.id,
-    ...payload,
+    id:
+      ref.id,
+
+    producerId:
+      payload.producerId,
+
+    farmId:
+      payload.farmId,
+
+    nome:
+      payload.nome,
+
+    coordenadas:
+      payload.coordenadas,
+
+    pontos:
+      payload.pontos,
+
+    limiteOperacional:
+      payload.limiteOperacional,
+
+    areaHa:
+      payload.areaHa,
+
+    area:
+      payload.areaHa,
+
+    areaOperacionalHa:
+      payload.areaOperacionalHa,
+
+    bordaduraPercentual:
+      payload.bordaduraPercentual,
+
+    perimetroMetros:
+      payload.perimetroMetros,
+
+    centroide:
+      payload.centroide ??
+      undefined,
+
+    status:
+      payload.status,
+
+    createdAt:
+      payload.createdAt,
+
+    updatedAt:
+      payload.updatedAt,
   };
 }
