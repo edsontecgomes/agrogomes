@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "react";
 
 import { loadGoogleMaps } from "../../../services/googleMaps";
 import { buscarUEIsDoTalhao } from "../../motorEspacial/buscarUEIsDoTalhao";
+import {
+  criarCamadaLocalizacaoUsuarioGoogleMaps,
+  type ControleLocalizacaoUsuarioGoogleMaps,
+} from "../../motorEspacial/camadaLocalizacaoUsuarioGoogleMaps";
 
 import type { LatLng } from "../../../features/map/types/map.types";
 import type { UEIEspacial } from "../../motorEspacial/types";
@@ -251,6 +255,11 @@ export function TalhaoMapCanvasV2({
   const mapInstanceRef =
     useRef<any>(null);
 
+  const localizacaoUsuarioRef =
+    useRef<ControleLocalizacaoUsuarioGoogleMaps | null>(
+      null,
+    );
+
   const overlaysTalhoesRef =
     useRef<any[]>([]);
 
@@ -361,6 +370,20 @@ export function TalhaoMapCanvasV2({
 
         mapInstanceRef.current = mapa;
 
+        localizacaoUsuarioRef.current?.limpar();
+        localizacaoUsuarioRef.current =
+          criarCamadaLocalizacaoUsuarioGoogleMaps(
+            google,
+            mapa,
+            {
+              centralizarNaPrimeiraLeitura:
+                coordenadasPrimeiroTalhao.length <
+                3,
+              zoomAoCentralizar: 18,
+              precisaoMaximaParaCentralizar: 50,
+            },
+          );
+
         setLoading(false);
       } catch (error) {
         console.error(
@@ -382,6 +405,9 @@ export function TalhaoMapCanvasV2({
 
     return () => {
       ativo = false;
+      localizacaoUsuarioRef.current?.limpar();
+      localizacaoUsuarioRef.current = null;
+      mapInstanceRef.current = null;
     };
   }, []);
 
@@ -542,7 +568,7 @@ export function TalhaoMapCanvasV2({
             selecionado ? 1 : 0.65,
 
           strokeWeight:
-            selecionado ? 4 : 2,
+            selecionado ? 2 : 1,
 
           fillColor: cor,
 
@@ -650,10 +676,10 @@ export function TalhaoMapCanvasV2({
 
           strokeColor: "#f8fafc",
           strokeOpacity: 0.95,
-          strokeWeight: 2,
+          strokeWeight: 1,
 
           fillColor: "#0ea5e9",
-          fillOpacity: 0.08,
+          fillOpacity: 0.045,
 
           clickable: true,
           zIndex: 5,
@@ -667,10 +693,10 @@ export function TalhaoMapCanvasV2({
         () => {
           poligono.setOptions({
             strokeColor: "#facc15",
-            strokeWeight: 3,
+            strokeWeight: 1.5,
 
             fillColor: "#facc15",
-            fillOpacity: 0.16,
+            fillOpacity: 0.12,
           });
         },
       );
@@ -680,10 +706,10 @@ export function TalhaoMapCanvasV2({
         () => {
           poligono.setOptions({
             strokeColor: "#f8fafc",
-            strokeWeight: 2,
+            strokeWeight: 1,
 
             fillColor: "#0ea5e9",
-            fillOpacity: 0.08,
+            fillOpacity: 0.045,
           });
         },
       );
@@ -890,7 +916,7 @@ export function TalhaoMapCanvasV2({
             corDesenho,
 
           strokeOpacity: 1,
-          strokeWeight: 3,
+          strokeWeight: 2,
 
           fillColor:
             corDesenho,
@@ -913,7 +939,7 @@ export function TalhaoMapCanvasV2({
             corDesenho,
 
           strokeOpacity: 1,
-          strokeWeight: 3,
+          strokeWeight: 2,
 
           clickable: false,
 
@@ -954,7 +980,7 @@ export function TalhaoMapCanvasV2({
               strokeColor:
                 "#ffffff",
 
-              strokeWeight: 2,
+              strokeWeight: 1.5,
             },
 
             title:

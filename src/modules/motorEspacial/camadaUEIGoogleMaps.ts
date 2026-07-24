@@ -1,9 +1,16 @@
 import { UEIEspacial } from "./types";
 
+import {
+  ControleLocalizacaoUsuarioGoogleMaps,
+  criarCamadaLocalizacaoUsuarioGoogleMaps,
+} from "./camadaLocalizacaoUsuarioGoogleMaps";
+
 type CamadaUEIGoogleMapsOpcoes = {
   ajustarEnquadramento?: boolean;
   zoomRotuloResumido?: number;
   zoomRotuloCompleto?: number;
+  exibirLocalizacaoUsuario?: boolean;
+  centralizarUsuarioNaPrimeiraLeitura?: boolean;
 };
 
 export type ControleCamadaUEIGoogleMaps = {
@@ -35,7 +42,8 @@ function obterCentroide(
     });
   });
 
-  const centro = limites.getCenter();
+  const centro =
+    limites.getCenter();
 
   return {
     lat: centro.lat(),
@@ -47,10 +55,9 @@ function codigoResumido(
   uei: UEIEspacial,
 ): string {
   if (typeof uei.numero === "number") {
-    return `UEI ${String(uei.numero).padStart(
-      3,
-      "0",
-    )}`;
+    return `UEI ${String(
+      uei.numero,
+    ).padStart(3, "0")}`;
   }
 
   return (
@@ -78,7 +85,8 @@ function criarConteudoInfo(
 
   conteudo.style.padding = "8px";
   conteudo.style.color = "#0f172a";
-  conteudo.style.fontFamily = "sans-serif";
+  conteudo.style.fontFamily =
+    "sans-serif";
 
   const titulo =
     document.createElement("strong");
@@ -98,7 +106,10 @@ function criarConteudoInfo(
   area.style.color = "#475569";
   area.style.fontSize = "12px";
 
-  conteudo.append(titulo, area);
+  conteudo.append(
+    titulo,
+    area,
+  );
 
   return conteudo;
 }
@@ -113,6 +124,9 @@ export function criarCamadaUEIGoogleMaps(
     ajustarEnquadramento = false,
     zoomRotuloResumido = 17,
     zoomRotuloCompleto = 19,
+    exibirLocalizacaoUsuario = true,
+    centralizarUsuarioNaPrimeiraLeitura =
+      false,
   } = opcoes;
 
   const poligonos: any[] = [];
@@ -125,13 +139,30 @@ export function criarCamadaUEIGoogleMaps(
   const infoWindow =
     new google.maps.InfoWindow();
 
+  let controleLocalizacao:
+    ControleLocalizacaoUsuarioGoogleMaps | null =
+    null;
+
+  if (exibirLocalizacaoUsuario) {
+    controleLocalizacao =
+      criarCamadaLocalizacaoUsuarioGoogleMaps(
+        google,
+        mapa,
+        {
+          centralizarNaPrimeiraLeitura:
+            centralizarUsuarioNaPrimeiraLeitura,
+        },
+      );
+  }
+
   ueis.forEach((uei) => {
-    const caminho = uei.geometria.map(
-      (ponto) => ({
-        lat: ponto.lat,
-        lng: ponto.lng,
-      }),
-    );
+    const caminho =
+      uei.geometria.map(
+        (ponto) => ({
+          lat: ponto.lat,
+          lng: ponto.lng,
+        }),
+      );
 
     caminho.forEach((ponto) => {
       limites.extend(ponto);
@@ -144,11 +175,11 @@ export function criarCamadaUEIGoogleMaps(
         clickable: true,
 
         fillColor: "#10b981",
-        fillOpacity: 0.09,
+        fillOpacity: 0.045,
 
         strokeColor: "#f8fafc",
-        strokeOpacity: 0.95,
-        strokeWeight: 2,
+        strokeOpacity: 0.8,
+        strokeWeight: 1,
 
         zIndex: 3,
       });
@@ -167,12 +198,16 @@ export function criarCamadaUEIGoogleMaps(
 
         icon: {
           path:
-            google.maps.SymbolPath.CIRCLE,
+            google.maps.SymbolPath
+              .CIRCLE,
+
           scale: 0,
         },
 
         label: {
-          text: codigoResumido(uei),
+          text:
+            codigoResumido(uei),
+
           color: "#ffffff",
           fontSize: "11px",
           fontWeight: "700",
@@ -185,8 +220,10 @@ export function criarCamadaUEIGoogleMaps(
         () => {
           poligono.setOptions({
             fillColor: "#facc15",
-            fillOpacity: 0.22,
+            fillOpacity: 0.14,
             strokeColor: "#fde047",
+            strokeOpacity: 0.9,
+            strokeWeight: 1.5,
           });
         },
       ),
@@ -196,8 +233,10 @@ export function criarCamadaUEIGoogleMaps(
         () => {
           poligono.setOptions({
             fillColor: "#10b981",
-            fillOpacity: 0.09,
+            fillOpacity: 0.045,
             strokeColor: "#f8fafc",
+            strokeOpacity: 0.8,
+            strokeWeight: 1,
           });
         },
       ),
@@ -233,19 +272,22 @@ export function criarCamadaUEIGoogleMaps(
     rotulos.forEach(
       ({ marcador, uei }) => {
         marcador.setVisible(
-          zoom >= zoomRotuloResumido,
+          zoom >=
+            zoomRotuloResumido,
         );
 
         marcador.setLabel({
           text:
-            zoom >= zoomRotuloCompleto
+            zoom >=
+            zoomRotuloCompleto
               ? codigoCompleto(uei)
               : codigoResumido(uei),
 
           color: "#ffffff",
 
           fontSize:
-            zoom >= zoomRotuloCompleto
+            zoom >=
+            zoomRotuloCompleto
               ? "12px"
               : "11px",
 
@@ -268,24 +310,36 @@ export function criarCamadaUEIGoogleMaps(
     ajustarEnquadramento &&
     !limites.isEmpty()
   ) {
-    mapa.fitBounds(limites, 36);
+    mapa.fitBounds(
+      limites,
+      36,
+    );
   }
 
   return {
     limpar: () => {
-      listeners.forEach((listener) => {
-        listener.remove();
-      });
+      listeners.forEach(
+        (listener) => {
+          listener.remove();
+        },
+      );
 
-      poligonos.forEach((poligono) => {
-        poligono.setMap(null);
-      });
+      poligonos.forEach(
+        (poligono) => {
+          poligono.setMap(null);
+        },
+      );
 
-      rotulos.forEach(({ marcador }) => {
-        marcador.setMap(null);
-      });
+      rotulos.forEach(
+        ({ marcador }) => {
+          marcador.setMap(null);
+        },
+      );
 
       infoWindow.close();
+
+      controleLocalizacao?.limpar();
+      controleLocalizacao = null;
     },
   };
 }
