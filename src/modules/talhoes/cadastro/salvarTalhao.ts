@@ -56,6 +56,12 @@ export async function salvarTalhaoCadastro(
     limiteOperacional:
       payload.limiteOperacional,
 
+    limiteAtivacaoOperacional:
+      payload.limiteAtivacaoOperacional,
+
+    limiteNucleoProdutivo:
+      payload.limiteNucleoProdutivo,
+
     areaHa:
       payload.areaHa,
 
@@ -67,6 +73,21 @@ export async function salvarTalhaoCadastro(
 
     bordaduraPercentual:
       payload.bordaduraPercentual,
+
+    bordaduraAgronomicaPercentual:
+      payload.bordaduraAgronomicaPercentual,
+
+    distanciaSegurancaOperacionalMetros:
+      payload.distanciaSegurancaOperacionalMetros,
+
+    areaAtivacaoOperacionalHa:
+      payload.areaAtivacaoOperacionalHa,
+
+    areaBordaduraAgronomicaHa:
+      payload.areaBordaduraAgronomicaHa,
+
+    areaNucleoProdutivoHa:
+      payload.areaNucleoProdutivoHa,
 
     perimetroMetros:
       payload.perimetroMetros,

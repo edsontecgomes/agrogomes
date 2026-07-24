@@ -1,11 +1,16 @@
-export type PercentualBordaduraTalhao = 10 | 15 | 20;
+export const DISTANCIA_SEGURANCA_OPERACIONAL_METROS =
+  20 as const;
+
+export const BORDADURA_AGRONOMICA_PERCENTUAL =
+  4 as const;
+
+export type PercentualBordaduraTalhao =
+  typeof BORDADURA_AGRONOMICA_PERCENTUAL;
 
 export function normalizarBordaduraTalhao(
-  percentual?: number,
+  _percentual?: number,
 ): PercentualBordaduraTalhao {
-  if (!percentual || percentual <= 10) return 10;
-  if (percentual <= 15) return 15;
-  return 20;
+  return BORDADURA_AGRONOMICA_PERCENTUAL;
 }
 
 export function calcularAreaOperacionalTalhao(

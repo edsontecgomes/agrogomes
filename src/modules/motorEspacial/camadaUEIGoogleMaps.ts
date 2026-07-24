@@ -106,9 +106,29 @@ function criarConteudoInfo(
   area.style.color = "#475569";
   area.style.fontSize = "12px";
 
+  const zona =
+    document.createElement("span");
+
+  zona.textContent =
+    uei.zonaTalhao ===
+    "faixa_avaliacao_bordadura"
+      ? "Célula de bordadura"
+      : "Núcleo produtivo";
+
+  zona.style.display = "block";
+  zona.style.marginTop = "4px";
+  zona.style.color =
+    uei.zonaTalhao ===
+    "faixa_avaliacao_bordadura"
+      ? "#b45309"
+      : "#047857";
+  zona.style.fontSize = "11px";
+  zona.style.fontWeight = "700";
+
   conteudo.append(
     titulo,
     area,
+    zona,
   );
 
   return conteudo;
@@ -156,6 +176,15 @@ export function criarCamadaUEIGoogleMaps(
   }
 
   ueis.forEach((uei) => {
+    const pertenceFaixaAvaliacao =
+      uei.zonaTalhao ===
+      "faixa_avaliacao_bordadura";
+
+    const corBase =
+      pertenceFaixaAvaliacao
+        ? "#f59e0b"
+        : "#10b981";
+
     const caminho =
       uei.geometria.map(
         (ponto) => ({
@@ -174,8 +203,11 @@ export function criarCamadaUEIGoogleMaps(
         map: mapa,
         clickable: true,
 
-        fillColor: "#10b981",
-        fillOpacity: 0.045,
+        fillColor: corBase,
+        fillOpacity:
+          pertenceFaixaAvaliacao
+            ? 0.1
+            : 0.045,
 
         strokeColor: "#f8fafc",
         strokeOpacity: 0.8,
@@ -232,8 +264,11 @@ export function criarCamadaUEIGoogleMaps(
         "mouseout",
         () => {
           poligono.setOptions({
-            fillColor: "#10b981",
-            fillOpacity: 0.045,
+            fillColor: corBase,
+            fillOpacity:
+              pertenceFaixaAvaliacao
+                ? 0.1
+                : 0.045,
             strokeColor: "#f8fafc",
             strokeOpacity: 0.8,
             strokeWeight: 1,

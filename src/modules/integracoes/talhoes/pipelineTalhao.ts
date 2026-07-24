@@ -6,7 +6,7 @@ import { gerarHectaresInteligentesTalhao } from "./gerarHectaresInteligentesTalh
 
 export function processarTalhaoParaHectaresInteligentes(
   talhao: TalhaoFirestore,
-  bordaduraPercentual = 15,
+  bordaduraPercentual = 4,
 ) {
   const geometria = integrarTalhaoFirestore(talhao);
   const areaOperacional = gerarAreaOperacionalTalhao(

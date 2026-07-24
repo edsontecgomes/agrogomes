@@ -63,7 +63,7 @@ function validarAreaTotal(
 export function criarAreaOperacional(
   limiteOriginal: PoligonoTalhao,
   areaTotalHa: number,
-  bordaduraPercentual = 15,
+  bordaduraPercentual = 4,
 ): AreaOperacionalTalhao {
   validarLimiteOriginal(limiteOriginal);
 

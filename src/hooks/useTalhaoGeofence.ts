@@ -1,9 +1,129 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef
+} from 'react';
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
 import { point } from '@turf/helpers';
-import { Talhao, OrdemServico, ExecucaoServico } from '../types';
+import { Talhao, OrdemServico } from '../types';
 import { useOrdensServico, useMinhasExecucoesAtivas } from './useServicos';
 import { useTalhoes } from './useTalhoes';
+import { criarBufferInternoMetros } from '../modules/geometria/buffer/criarBufferInterno';
+import { criarPoligonoTurf } from '../modules/geometria';
+
+type CoordenadaTalhao = {
+  lat: number;
+  lng: number;
+};
+
+const DISTANCIA_SEGURA_METROS = 20;
+const PRECISAO_MAXIMA_GPS_METROS = 20;
+const CHECK_INTERVAL = 10000;
+
+function coordenadasValidas(
+  valor: unknown
+): valor is CoordenadaTalhao[] {
+  return (
+    Array.isArray(valor) &&
+    valor.length >= 3 &&
+    valor.every(
+      (coordenada) =>
+        Number.isFinite(coordenada?.lat) &&
+        Number.isFinite(coordenada?.lng)
+    )
+  );
+}
+
+function obterCoordenadasGeoJson(
+  geometria: any
+): CoordenadaTalhao[] | null {
+  const coordinates =
+    geometria?.geometry?.coordinates?.[0] ??
+    geometria?.coordinates?.[0];
+
+  if (!Array.isArray(coordinates)) {
+    return null;
+  }
+
+  const convertidas = coordinates.map(
+    (coordenada: unknown) => {
+      if (
+        !Array.isArray(coordenada) ||
+        coordenada.length < 2
+      ) {
+        return null;
+      }
+
+      const [lng, lat] = coordenada;
+
+      return {
+        lat: Number(lat),
+        lng: Number(lng)
+      };
+    }
+  );
+
+  if (
+    convertidas.some(
+      (coordenada) =>
+        !coordenada ||
+        !Number.isFinite(coordenada.lat) ||
+        !Number.isFinite(coordenada.lng)
+    )
+  ) {
+    return null;
+  }
+
+  return convertidas as CoordenadaTalhao[];
+}
+
+function obterLimiteAtivacao(
+  talhao: Talhao
+): CoordenadaTalhao[] | null {
+  if (
+    coordenadasValidas(
+      talhao.limiteAtivacaoOperacional
+    )
+  ) {
+    return talhao.limiteAtivacaoOperacional;
+  }
+
+  const limiteFisico =
+    coordenadasValidas(talhao.coordenadas)
+      ? talhao.coordenadas
+      : obterCoordenadasGeoJson(
+          talhao.geometria
+        );
+
+  if (limiteFisico) {
+    try {
+      return criarBufferInternoMetros(
+        limiteFisico,
+        DISTANCIA_SEGURA_METROS
+      ).geometria;
+    } catch (error) {
+      console.warn(
+        'Talhão sem área interna suficiente para ativação automática a 20 m.',
+        talhao.id,
+        error
+      );
+
+      return null;
+    }
+  }
+
+  if (
+    coordenadasValidas(
+      talhao.limiteOperacional
+    )
+  ) {
+    return talhao.limiteOperacional;
+  }
+
+  return null;
+}
 
 export function useTalhaoGeofence(farmId: string | null) {
   const { talhoes } = useTalhoes(farmId || undefined);
@@ -15,22 +135,74 @@ export function useTalhaoGeofence(farmId: string | null) {
   const [location, setLocation] = useState<{lat: number, lng: number, accuracy: number} | null>(null);
   
   const lastCheckRef = useRef<number>(0);
-  const CHECK_INTERVAL = 10000; // 10 seconds checking interval
+
+  const talhoesComLimiteSeguro =
+    useMemo(
+      () =>
+        talhoes.flatMap(
+          (talhao) => {
+            const coordenadas =
+              obterLimiteAtivacao(
+                talhao
+              );
+
+            if (!coordenadas) {
+              return [];
+            }
+
+            try {
+              return [
+                {
+                  talhao,
+                  poligono:
+                    criarPoligonoTurf(
+                      coordenadas
+                    )
+                }
+              ];
+            } catch (error) {
+              console.warn(
+                'Limite seguro inválido para o talhão',
+                talhao.id,
+                error
+              );
+
+              return [];
+            }
+          }
+        ),
+      [talhoes]
+    );
 
   const detectTalhao = useCallback((lat: number, lng: number) => {
     const pt = point([lng, lat]);
     
     let found: Talhao | null = null;
-    for (const t of talhoes) {
-      if (t.geometria && t.geometria.geometry) {
-        try {
-          if (booleanPointInPolygon(pt, t.geometria as any)) {
-            found = t;
-            break;
-          }
-        } catch (e) {
-          console.warn('Error checking geofence for talhao', t.id, e);
+    for (
+      const {
+        talhao,
+        poligono
+      } of talhoesComLimiteSeguro
+    ) {
+      try {
+        if (
+          booleanPointInPolygon(
+            pt,
+            poligono,
+            {
+              ignoreBoundary: false
+            }
+          )
+        ) {
+          found = talhao;
+          break;
         }
+      } catch (e) {
+        console.warn(
+          'Erro ao verificar limite seguro do talhão',
+          talhao.id,
+          e
+        );
       }
     }
 
@@ -57,7 +229,12 @@ export function useTalhaoGeofence(farmId: string | null) {
         setSuggestedOrdem(null);
       }
     }
-  }, [talhoes, ordens, currentTalhao, execucoesAtivas]);
+  }, [
+    talhoesComLimiteSeguro,
+    ordens,
+    currentTalhao,
+    execucoesAtivas
+  ]);
 
   useEffect(() => {
     if (!navigator.geolocation || !farmId || talhoes.length === 0) return;
@@ -67,12 +244,18 @@ export function useTalhaoGeofence(farmId: string | null) {
         const { latitude, longitude, accuracy } = position.coords;
         setLocation({ lat: latitude, lng: longitude, accuracy });
 
+        if (
+          accuracy >
+          PRECISAO_MAXIMA_GPS_METROS
+        ) {
+          setCurrentTalhao(null);
+          setSuggestedOrdem(null);
+          return;
+        }
+
         const now = Date.now();
         if (now - lastCheckRef.current < CHECK_INTERVAL) return;
         lastCheckRef.current = now;
-
-        // Accuracy filter: accuracy <= 20m
-        if (accuracy > 20) return;
 
         detectTalhao(latitude, longitude);
       },

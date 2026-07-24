@@ -9,6 +9,9 @@ import {
   converterPoligonoParaCoordenadas,
   criarPoligonoTurf,
 } from "../polygon";
+import type {
+  UeiZonaTalhao,
+} from "../../uei/types";
 
 export type CelulaGridGeografico = {
   id: string;
@@ -17,6 +20,7 @@ export type CelulaGridGeografico = {
   centroide: CoordenadaGeografica;
   geometria: CoordenadaGeografica[];
   origem: "grid_geografico";
+  zonaTalhao?: UeiZonaTalhao;
 };
 
 type GerarGridGeograficoBasicoParams = {

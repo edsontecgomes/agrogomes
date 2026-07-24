@@ -30,6 +30,18 @@ export type Talhao = {
   limiteOperacional?: LatLng[];
 
   /**
+   * Limite utilizado pelo geofence para detectar entrada
+   * segura do operador, 20 metros dentro do talhão.
+   */
+  limiteAtivacaoOperacional?: LatLng[];
+
+  /**
+   * Limite do núcleo produtivo após a bordadura
+   * agronômica de 4%.
+   */
+  limiteNucleoProdutivo?: LatLng[];
+
+  /**
    * Compatibilidade com componentes do mapa científico.
    */
   polygon?: LatLng[];
@@ -48,7 +60,21 @@ export type Talhao = {
 
   areaOperacionalHa?: number;
 
-  bordaduraPercentual?: 10 | 15 | 20;
+  /**
+   * Novos cadastros usam 4%. Os demais valores
+   * permanecem apenas para leitura de registros legados.
+   */
+  bordaduraPercentual?: 4 | 10 | 15 | 20;
+
+  bordaduraAgronomicaPercentual?: 4;
+
+  distanciaSegurancaOperacionalMetros?: 20;
+
+  areaAtivacaoOperacionalHa?: number;
+
+  areaBordaduraAgronomicaHa?: number;
+
+  areaNucleoProdutivoHa?: number;
 
   perimetroMetros?: number;
 

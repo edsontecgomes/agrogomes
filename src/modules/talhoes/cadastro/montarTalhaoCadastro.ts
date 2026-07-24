@@ -6,6 +6,8 @@ import {
 import { calcularCentroideTalhao } from "./centroideTalhao";
 
 import {
+  BORDADURA_AGRONOMICA_PERCENTUAL,
+  DISTANCIA_SEGURANCA_OPERACIONAL_METROS,
   normalizarBordaduraTalhao,
 } from "./bordaduraTalhao";
 
@@ -13,6 +15,7 @@ import { calcularPerimetroTalhao } from "./perimetroTalhao";
 
 import {
   criarBufferInterno,
+  criarBufferInternoMetros,
 } from "../../geometria/buffer/criarBufferInterno";
 
 function validarParametros(params: {
@@ -79,15 +82,15 @@ export function montarTalhaoCadastro(params: {
       params.bordaduraPercentual,
     );
 
-  const resultadoBuffer =
-    criarBufferInterno(
+  const resultadoAtivacao =
+    criarBufferInternoMetros(
       params.coordenadas,
-      bordaduraPercentual,
+      DISTANCIA_SEGURANCA_OPERACIONAL_METROS,
     );
 
   if (
-    !Array.isArray(resultadoBuffer.geometria) ||
-    resultadoBuffer.geometria.length < 3
+    !Array.isArray(resultadoAtivacao.geometria) ||
+    resultadoAtivacao.geometria.length < 3
   ) {
     throw new Error(
       "Não foi possível montar o talhão: o limite operacional gerado é inválido.",
@@ -95,13 +98,40 @@ export function montarTalhaoCadastro(params: {
   }
 
   if (
-    !Number.isFinite(resultadoBuffer.areaHa) ||
-    resultadoBuffer.areaHa <= 0
+    !Number.isFinite(resultadoAtivacao.areaHa) ||
+    resultadoAtivacao.areaHa <= 0
   ) {
     throw new Error(
-      "Não foi possível montar o talhão: a área operacional gerada é inválida.",
+      "Não foi possível montar o talhão: a área interna de segurança de 20 metros é inválida.",
     );
   }
+
+  const resultadoNucleo =
+    criarBufferInterno(
+      params.coordenadas,
+      bordaduraPercentual,
+    );
+
+  if (
+    !Array.isArray(resultadoNucleo.geometria) ||
+    resultadoNucleo.geometria.length < 3 ||
+    !Number.isFinite(resultadoNucleo.areaHa) ||
+    resultadoNucleo.areaHa <= 0 ||
+    resultadoNucleo.areaHa >
+      params.areaHa
+  ) {
+    throw new Error(
+      "Não foi possível montar o talhão: o núcleo produtivo gerado é inválido.",
+    );
+  }
+
+  const areaBordaduraAgronomicaHa = Number(
+    Math.max(
+      0,
+      params.areaHa -
+        resultadoNucleo.areaHa,
+    ).toFixed(4),
+  );
 
   return {
     farmId: params.farmId,
@@ -111,7 +141,13 @@ export function montarTalhaoCadastro(params: {
     coordenadas: params.coordenadas,
 
     limiteOperacional:
-      resultadoBuffer.geometria,
+      resultadoAtivacao.geometria,
+
+    limiteAtivacaoOperacional:
+      resultadoAtivacao.geometria,
+
+    limiteNucleoProdutivo:
+      resultadoNucleo.geometria,
 
     areaHa: params.areaHa,
 
@@ -125,10 +161,25 @@ export function montarTalhaoCadastro(params: {
         params.coordenadas,
       ),
 
-    bordaduraPercentual,
+    bordaduraPercentual:
+      BORDADURA_AGRONOMICA_PERCENTUAL,
+
+    bordaduraAgronomicaPercentual:
+      BORDADURA_AGRONOMICA_PERCENTUAL,
+
+    distanciaSegurancaOperacionalMetros:
+      DISTANCIA_SEGURANCA_OPERACIONAL_METROS,
 
     areaOperacionalHa:
-      resultadoBuffer.areaHa,
+      resultadoAtivacao.areaHa,
+
+    areaAtivacaoOperacionalHa:
+      resultadoAtivacao.areaHa,
+
+    areaBordaduraAgronomicaHa,
+
+    areaNucleoProdutivoHa:
+      resultadoNucleo.areaHa,
 
     status: "ativo",
   };

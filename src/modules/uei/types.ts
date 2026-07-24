@@ -17,6 +17,10 @@ export type UeiOrigem =
   | "satelite"
   | "ia";
 
+export type UeiZonaTalhao =
+  | "faixa_avaliacao_bordadura"
+  | "nucleo_produtivo";
+
 export type Uei = {
   id: string;
   producerId?: string;
@@ -29,6 +33,7 @@ export type Uei = {
   geometria?: CoordenadaUEI[];
   centroide?: CoordenadaUEI;
   origem?: UeiOrigem;
+  zonaTalhao?: UeiZonaTalhao;
   status: UeiStatus;
   createdAt?: unknown;
   updatedAt?: unknown;

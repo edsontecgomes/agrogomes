@@ -22,6 +22,8 @@ export type PipelineCriacaoUEIsParams = {
 
   coordenadasTalhao: CoordenadaGeografica[];
 
+  limiteNucleoProdutivo?: CoordenadaGeografica[];
+
   areaAlvoHa?: number;
 
   areaMinimaHa?: number;
@@ -146,6 +148,9 @@ export async function pipelineCriacaoUEIs(
       coordenadasTalhao:
         params.coordenadasTalhao,
 
+      limiteNucleoProdutivo:
+        params.limiteNucleoProdutivo,
+
       areaAlvoHa:
         params.areaAlvoHa ?? 1,
 
@@ -176,6 +181,9 @@ export async function pipelineCriacaoUEIs(
       centroide: uei.centroide,
 
       origem: uei.origem,
+
+      zonaTalhao:
+        uei.zonaTalhao,
 
       status: uei.status,
 

@@ -36,7 +36,14 @@ export function GeofenceSuggester({
     useMinhasExecucoesAtivas(farmId);
 
   const handleStart = async () => {
-    if (!suggestedOrdem || !currentTalhao) return;
+    if (
+      !suggestedOrdem ||
+      !currentTalhao ||
+      !location ||
+      location.accuracy > 20
+    ) {
+      return;
+    }
 
     await iniciarExecucao(
       farmId,
@@ -100,7 +107,8 @@ export function GeofenceSuggester({
                   </h3>
 
                   <p className="text-slate-600 mb-6 text-sm leading-relaxed">
-                    Você entrou no talhão{' '}
+                    O GPS confirmou que você está pelo menos
+                    20 metros dentro do talhão{' '}
                     <span className="font-bold text-slate-900">
                       {currentTalhao.nome}
                     </span>
@@ -115,7 +123,11 @@ export function GeofenceSuggester({
                     <button
                       type="button"
                       onClick={handleStart}
-                      className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98]"
+                      disabled={
+                        !location ||
+                        location.accuracy > 20
+                      }
+                      className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <PlayCircle className="w-5 h-5" />
                       Iniciar trabalho

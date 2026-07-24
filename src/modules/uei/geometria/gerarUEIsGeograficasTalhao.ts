@@ -1,6 +1,7 @@
 import {
   CoordenadaGeografica,
   gerarGridGeograficoBasico,
+  gerarGridGeograficoZonado,
 } from "../../geometria";
 
 import {
@@ -18,6 +19,12 @@ export type GerarUEIsGeograficasTalhaoParams = {
   nomeTalhao: string;
 
   coordenadasTalhao: CoordenadaGeografica[];
+
+  /**
+   * Limite interno que separa a bordadura agronômica
+   * do núcleo produtivo.
+   */
+  limiteNucleoProdutivo?: CoordenadaGeografica[];
 
   /**
    * Área aproximada desejada para cada UEI.
@@ -111,15 +118,55 @@ export function gerarUEIsGeograficasTalhao(
 ): UEIGeometrica[] {
   validarParametros(params);
 
-  const grid = gerarGridGeograficoBasico({
-    talhaoId: params.talhaoId,
+  const possuiNucleo =
+    Boolean(
+      params.limiteNucleoProdutivo &&
+      params.limiteNucleoProdutivo.length >=
+        3,
+    );
 
-    coordenadasTalhao: params.coordenadasTalhao,
+  const grid = possuiNucleo
+    ? gerarGridGeograficoZonado({
+        talhaoId:
+          params.talhaoId,
 
-    areaAlvoHa: params.areaAlvoHa ?? 1,
+        coordenadasTalhao:
+          params.coordenadasTalhao,
 
-    areaMinimaHa: params.areaMinimaHa ?? 0.2,
-  });
+        limiteNucleoProdutivo:
+          params.limiteNucleoProdutivo!,
+
+        areaAlvoHa:
+          params.areaAlvoHa ?? 1,
+
+        areaMinimaNucleoHa:
+          Math.min(
+            params.areaMinimaHa ??
+              0.2,
+            0.01,
+          ),
+
+        areaMinimaBordaduraHa:
+          0.01,
+      })
+    : gerarGridGeograficoBasico({
+        talhaoId:
+          params.talhaoId,
+
+        coordenadasTalhao:
+          params.coordenadasTalhao,
+
+        areaAlvoHa:
+          params.areaAlvoHa ?? 1,
+
+        areaMinimaHa:
+          params.areaMinimaHa ??
+          0.2,
+      }).map((celula) => ({
+        ...celula,
+        zonaTalhao:
+          "nucleo_produtivo" as const,
+      }));
 
   if (!grid.length) {
     throw new Error(

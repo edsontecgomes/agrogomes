@@ -31,41 +31,25 @@ function validarPercentual(
   }
 }
 
-/**
- * Cria um buffer negativo aproximado
- * preservando o formato do talhão.
- *
- * A distância do buffer é estimada
- * utilizando a área do polígono.
- *
- * Esta abordagem é suficientemente
- * precisa para bordaduras operacionais.
- */
-export function criarBufferInterno(
+function validarDistanciaMetros(
+  distanciaMetros: number,
+) {
+  if (
+    !Number.isFinite(distanciaMetros) ||
+    distanciaMetros <= 0
+  ) {
+    throw new Error(
+      "Distância do limite operacional inválida.",
+    );
+  }
+}
+
+function executarBufferInterno(
   coordenadas: CoordenadaGeografica[],
-  percentual: number,
+  distanciaMetros: number,
 ): ResultadoBufferInterno {
-
-  validarPercentual(percentual);
-
   const poligono =
     criarPoligonoTurf(coordenadas);
-
-  const areaM2 =
-    area(poligono);
-
-  /**
-   * Distância aproximada necessária
-   * para reduzir a área conforme
-   * o percentual informado.
-   */
-
-  const distanciaMetros =
-    Math.sqrt(areaM2)
-    *
-    (percentual / 100)
-    /
-    2;
 
   const resultado =
     buffer(
@@ -81,7 +65,7 @@ export function criarBufferInterno(
     resultado.geometry.type !== "Polygon"
   ) {
     throw new Error(
-      "Não foi possível gerar a área operacional do talhão.",
+      "Não foi possível gerar o limite interno do talhão.",
     );
   }
 
@@ -89,7 +73,6 @@ export function criarBufferInterno(
     area(resultado);
 
   return {
-
     geometria:
       converterPoligonoParaCoordenadas(
         resultado as Feature<Polygon>,
@@ -102,4 +85,68 @@ export function criarBufferInterno(
         ).toFixed(4),
       ),
   };
+}
+
+export function criarBufferInternoMetros(
+  coordenadas: CoordenadaGeografica[],
+  distanciaMetros: number,
+): ResultadoBufferInterno {
+  validarDistanciaMetros(
+    distanciaMetros,
+  );
+
+  return executarBufferInterno(
+    coordenadas,
+    distanciaMetros,
+  );
+}
+
+/**
+ * Cria um buffer negativo aproximado para que
+ * a faixa retirada represente o percentual
+ * informado da área total.
+ *
+ * A distância do buffer é estimada
+ * utilizando a área do polígono.
+ *
+ * Esta abordagem é destinada à bordadura
+ * agronômica. A segurança operacional usa
+ * criarBufferInternoMetros.
+ */
+export function criarBufferInterno(
+  coordenadas: CoordenadaGeografica[],
+  percentual: number,
+): ResultadoBufferInterno {
+
+  validarPercentual(percentual);
+
+  const poligono =
+    criarPoligonoTurf(coordenadas);
+
+  const areaM2 =
+    area(poligono);
+
+  const fracaoAreaNucleo =
+    1 - percentual / 100;
+
+  /**
+   * Aproxima o talhão por um quadrado equivalente.
+   * Assim, a retração ocorre nas duas extremidades
+   * de cada eixo e a área removida fica próxima
+   * do percentual solicitado.
+   */
+  const distanciaMetros =
+    Math.sqrt(areaM2)
+    * (
+      1 -
+      Math.sqrt(
+        fracaoAreaNucleo,
+      )
+    )
+    / 2;
+
+  return executarBufferInterno(
+    coordenadas,
+    distanciaMetros,
+  );
 }

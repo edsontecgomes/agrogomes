@@ -81,6 +81,9 @@ export async function buscarUEIsDaFazenda(
         origem:
           dados.origem,
 
+        zonaTalhao:
+          dados.zonaTalhao,
+
         status:
           dados.status,
       } as UEIEspacial;

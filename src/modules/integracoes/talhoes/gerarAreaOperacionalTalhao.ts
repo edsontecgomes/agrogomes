@@ -3,7 +3,7 @@ import { criarAreaOperacional } from "../../onboarding/geometriaTalhao/areaOpera
 
 export function gerarAreaOperacionalTalhao(
   talhao: TalhaoGeometria,
-  bordaduraPercentual = 15,
+  bordaduraPercentual = 4,
 ) {
   if (!talhao.areaTotalHa) {
     return null;

@@ -8,10 +8,7 @@ export type TalhaoEditorMode =
   | "desenho"
   | "salvando";
 
-export type BordaduraTalhaoEditor =
-  | 10
-  | 15
-  | 20;
+export type BordaduraTalhaoEditor = 4;
 
 export type TalhaoDraft = {
   nome: string;
@@ -83,10 +80,6 @@ export type TalhaoFormV2Props = {
     nome: string,
   ): void;
 
-  onChangeBordadura(
-    bordadura: BordaduraTalhaoEditor,
-  ): void;
-
   onIniciarDesenho(): void;
 
   onDesfazerPonto(): void;
@@ -106,7 +99,7 @@ export const TALHAO_DRAFT_INICIAL:
 
     areaHa: 0,
 
-    bordaduraPercentual: 15,
+    bordaduraPercentual: 4,
   };
 
 export function coordenadasTalhaoValidas(

@@ -5,16 +5,8 @@ import {
 } from "lucide-react";
 
 import type {
-  BordaduraTalhaoEditor,
   TalhaoFormV2Props,
 } from "./types";
-
-const OPCOES_BORDADURA:
-  BordaduraTalhaoEditor[] = [
-    10,
-    15,
-    20,
-  ];
 
 function obterClasseMensagem(
   tipo:
@@ -45,7 +37,6 @@ export function TalhaoFormV2({
   podeSalvar,
   mensagem,
   onChangeNome,
-  onChangeBordadura,
   onIniciarDesenho,
   onCancelar,
   onSalvar,
@@ -98,7 +89,7 @@ export function TalhaoFormV2({
               </li>
 
               <li>
-                3. Avance para informar nome e bordadura.
+                3. Avance para informar o nome e confirmar as faixas espaciais.
               </li>
             </ol>
           </div>
@@ -183,41 +174,41 @@ export function TalhaoFormV2({
 
           <div>
             <p className="mb-2 text-[11px] font-black uppercase tracking-widest text-slate-500">
-              Bordadura operacional
+              Regras espaciais padronizadas
             </p>
 
-            <div className="grid grid-cols-3 gap-2">
-              {OPCOES_BORDADURA.map(
-                (percentual) => {
-                  const selecionada =
-                    draft.bordaduraPercentual ===
-                    percentual;
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">
+                  Ativação GPS
+                </p>
 
-                  return (
-                    <button
-                      key={percentual}
-                      type="button"
-                      disabled={loading}
-                      onClick={() =>
-                        onChangeBordadura(
-                          percentual,
-                        )
-                      }
-                      className={`rounded-xl border px-3 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                        selecionada
-                          ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-                      }`}
-                    >
-                      {percentual}%
-                    </button>
-                  );
-                },
-              )}
+                <p className="mt-2 text-2xl font-black text-blue-800">
+                  20 m
+                </p>
+
+                <p className="mt-1 text-[11px] leading-relaxed text-blue-700">
+                  Sugere a ordem somente após a entrada segura.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">
+                  Bordadura agronômica
+                </p>
+
+                <p className="mt-2 text-2xl font-black text-amber-800">
+                  4%
+                </p>
+
+                <p className="mt-1 text-[11px] leading-relaxed text-amber-700">
+                  Formada por células próprias para manejo diferenciado.
+                </p>
+              </div>
             </div>
 
             <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-              A bordadura será removida geograficamente antes da geração das UEIs.
+              As células da bordadura e do núcleo são recortadas separadamente, sem sobreposição.
             </p>
           </div>
 

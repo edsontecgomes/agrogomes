@@ -43,6 +43,7 @@ export async function buscarUEIsDoTalhao(
           : [],
         centroide: dados.centroide,
         origem: dados.origem,
+        zonaTalhao: dados.zonaTalhao,
         status: dados.status,
       } as UEIEspacial;
     })

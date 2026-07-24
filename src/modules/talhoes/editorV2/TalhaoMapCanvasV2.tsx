@@ -596,6 +596,56 @@ export function TalhaoMapCanvasV2({
       overlaysTalhoesRef.current.push(
         polygon,
       );
+
+      if (selecionado) {
+        const limitesInternos = [
+          {
+            coordenadas:
+              talhao.limiteAtivacaoOperacional ??
+              talhao.limiteOperacional,
+            cor: "#3b82f6",
+          },
+          {
+            coordenadas:
+              talhao.limiteNucleoProdutivo,
+            cor: "#fbbf24",
+          },
+        ];
+
+        limitesInternos.forEach(
+          ({
+            coordenadas:
+              coordenadasLimite,
+            cor: corLimite,
+          }) => {
+            const pontos =
+              coordenadasLimite?.filter(
+                coordenadaValida,
+              ) ?? [];
+
+            if (pontos.length < 3) {
+              return;
+            }
+
+            const limite =
+              new googleMaps.maps.Polygon({
+                paths: pontos,
+                strokeColor: corLimite,
+                strokeOpacity: 0.95,
+                strokeWeight: 1.5,
+                fillOpacity: 0,
+                clickable: false,
+                zIndex: 4,
+                map:
+                  mapInstanceRef.current,
+              });
+
+            overlaysTalhoesRef.current.push(
+              limite,
+            );
+          },
+        );
+      }
     });
 
     return () => {
@@ -670,6 +720,15 @@ export function TalhaoMapCanvasV2({
       const centroide =
         obterCentroideUei(uei);
 
+      const pertenceFaixaAvaliacao =
+        uei.zonaTalhao ===
+        "faixa_avaliacao_bordadura";
+
+      const corBase =
+        pertenceFaixaAvaliacao
+          ? "#f59e0b"
+          : "#0ea5e9";
+
       const poligono =
         new googleMaps.maps.Polygon({
           paths: geometria,
@@ -678,8 +737,11 @@ export function TalhaoMapCanvasV2({
           strokeOpacity: 0.95,
           strokeWeight: 1,
 
-          fillColor: "#0ea5e9",
-          fillOpacity: 0.045,
+          fillColor: corBase,
+          fillOpacity:
+            pertenceFaixaAvaliacao
+              ? 0.1
+              : 0.045,
 
           clickable: true,
           zIndex: 5,
@@ -708,8 +770,11 @@ export function TalhaoMapCanvasV2({
             strokeColor: "#f8fafc",
             strokeWeight: 1,
 
-            fillColor: "#0ea5e9",
-            fillOpacity: 0.045,
+            fillColor: corBase,
+            fillOpacity:
+              pertenceFaixaAvaliacao
+                ? 0.1
+                : 0.045,
           });
         },
       );

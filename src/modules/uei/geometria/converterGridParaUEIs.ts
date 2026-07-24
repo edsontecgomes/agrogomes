@@ -37,6 +37,13 @@ export type UEIGeometrica = {
 
   origem: "grid_geografico";
 
+  zonaTalhao:
+    NonNullable<
+      CelulaGridGeografico[
+        "zonaTalhao"
+      ]
+    >;
+
   status: "ativa";
 
   criadoEm: Date;
@@ -151,7 +158,11 @@ export function converterGridParaUEIs(
 
       numero: celula.numero,
 
-      nome: `${params.nomeTalhao} - UEI ${celula.numero}`,
+      nome:
+        celula.zonaTalhao ===
+        "faixa_avaliacao_bordadura"
+          ? `${params.nomeTalhao} - Bordadura ${celula.numero}`
+          : `${params.nomeTalhao} - UEI ${celula.numero}`,
 
       areaHa: celula.areaHa,
 
@@ -160,6 +171,10 @@ export function converterGridParaUEIs(
       geometria: celula.geometria,
 
       origem: "grid_geografico",
+
+      zonaTalhao:
+        celula.zonaTalhao ??
+        "nucleo_produtivo",
 
       status: "ativa",
 

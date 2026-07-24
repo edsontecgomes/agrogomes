@@ -31,7 +31,6 @@ import {
 } from "./editorV2/types";
 
 import type {
-  BordaduraTalhaoEditor,
   TalhaoDraft,
   TalhaoEditorMensagem,
   TalhaoEditorMode,
@@ -127,22 +126,6 @@ export function TalhaoEditorV2({
 
       setMensagem(null);
     }, []);
-
-  const atualizarBordadura =
-    useCallback(
-      (
-        bordaduraPercentual:
-          BordaduraTalhaoEditor,
-      ) => {
-        setDraft((atual) => ({
-          ...atual,
-          bordaduraPercentual,
-        }));
-
-        setMensagem(null);
-      },
-      [],
-    );
 
   const atualizarCoordenadas =
     useCallback(
@@ -272,7 +255,7 @@ export function TalhaoEditorV2({
       setMensagem({
         tipo: "informacao",
         texto:
-          "Limite definido. Agora informe o nome e a bordadura do talhão.",
+          "Limite definido. Agora informe o nome e confirme as regras espacial e agronômica do talhão.",
       });
     }, [
       draft.areaHa,
@@ -339,8 +322,6 @@ export function TalhaoEditorV2({
             areaHa:
               draft.areaHa,
 
-            bordaduraPercentual:
-              draft.bordaduraPercentual,
           });
 
         if (
@@ -460,11 +441,11 @@ export function TalhaoEditorV2({
 
             <div className="rounded-xl bg-slate-50 px-4 py-3">
               <p className="font-black uppercase tracking-widest text-slate-400">
-                Bordadura
+                Regras internas
               </p>
 
               <p className="mt-1 text-lg font-black text-slate-800">
-                {draft.bordaduraPercentual}%
+                20 m + 4%
               </p>
             </div>
 
@@ -491,9 +472,6 @@ export function TalhaoEditorV2({
               }
               onChangeNome={
                 atualizarNome
-              }
-              onChangeBordadura={
-                atualizarBordadura
               }
               onIniciarDesenho={
                 iniciarDesenho

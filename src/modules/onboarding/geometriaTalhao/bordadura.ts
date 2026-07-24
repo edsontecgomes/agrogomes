@@ -1,9 +1,9 @@
-export type PercentualBordadura = 10 | 15 | 20;
+export type PercentualBordadura = 4;
 
-export function validarPercentualBordadura(percentual: number): PercentualBordadura {
-  if (percentual <= 10) return 10;
-  if (percentual <= 15) return 15;
-  return 20;
+export function validarPercentualBordadura(
+  _percentual: number,
+): PercentualBordadura {
+  return 4;
 }
 
 export function calcularAreaAposBordadura(

@@ -31,7 +31,6 @@ export async function executarFluxoCriarTalhao(
 
     areaHa: number;
 
-    bordaduraPercentual?: number;
   },
 ) {
   const talhao =
@@ -48,8 +47,6 @@ export async function executarFluxoCriarTalhao(
       areaHa:
         params.areaHa,
 
-      bordaduraPercentual:
-        params.bordaduraPercentual,
     });
 
   const validacao =
@@ -91,7 +88,10 @@ export async function executarFluxoCriarTalhao(
         params.nome,
 
       coordenadasTalhao:
-        talhao.limiteOperacional,
+        talhao.coordenadas,
+
+      limiteNucleoProdutivo:
+        talhao.limiteNucleoProdutivo,
 
       areaAlvoHa: 1,
 

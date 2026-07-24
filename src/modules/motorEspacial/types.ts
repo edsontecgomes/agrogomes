@@ -22,6 +22,9 @@ export type UEIEspacial = {
   centroide?: CoordenadaEspacial;
 
   origem?: string;
+  zonaTalhao?:
+    | "faixa_avaliacao_bordadura"
+    | "nucleo_produtivo";
   status?: string;
 };
 

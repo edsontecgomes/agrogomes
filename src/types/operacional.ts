@@ -242,6 +242,17 @@ export interface Talhao {
   area?: number;
   areaHa?: number;
   coordenadas: Array<{ lat: number; lng: number }>;
+  limiteOperacional?: Array<{ lat: number; lng: number }>;
+  limiteAtivacaoOperacional?: Array<{
+    lat: number;
+    lng: number;
+  }>;
+  limiteNucleoProdutivo?: Array<{
+    lat: number;
+    lng: number;
+  }>;
+  distanciaSegurancaOperacionalMetros?: 20;
+  bordaduraAgronomicaPercentual?: 4;
   cor?: string;
   producerId: string;
   createdAt?: any;
