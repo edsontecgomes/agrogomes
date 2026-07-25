@@ -25,6 +25,10 @@ import {
 import type {
   CelulaGridGeografico,
 } from "./gerarGridGeograficoBasico";
+import {
+  agruparCelulasBordadura,
+  AREA_ALVO_UEI_BORDADURA_HA,
+} from "./agruparCelulasBordadura";
 
 type PoligonoOuMultiPoligono =
   Feature<Polygon | MultiPolygon>;
@@ -34,6 +38,7 @@ export type GerarGridGeograficoZonadoParams = {
   coordenadasTalhao: CoordenadaGeografica[];
   limiteNucleoProdutivo: CoordenadaGeografica[];
   areaAlvoHa?: number;
+  areaAlvoBordaduraHa?: number;
   areaMinimaNucleoHa?: number;
   areaMinimaBordaduraHa?: number;
 };
@@ -142,14 +147,17 @@ export function gerarGridGeograficoZonado({
   coordenadasTalhao,
   limiteNucleoProdutivo,
   areaAlvoHa = 1,
+  areaAlvoBordaduraHa =
+    AREA_ALVO_UEI_BORDADURA_HA,
   areaMinimaNucleoHa = 0.01,
-  areaMinimaBordaduraHa = 0.01,
+  areaMinimaBordaduraHa = 0.001,
 }: GerarGridGeograficoZonadoParams): CelulaGridGeografico[] {
   validarParametros({
     talhaoId,
     coordenadasTalhao,
     limiteNucleoProdutivo,
     areaAlvoHa,
+    areaAlvoBordaduraHa,
     areaMinimaNucleoHa,
     areaMinimaBordaduraHa,
   });
@@ -307,5 +315,31 @@ export function gerarGridGeograficoZonado({
     );
   });
 
-  return celulas;
+  const celulasBordadura =
+    agruparCelulasBordadura({
+      talhaoId,
+      coordenadasTalhao,
+      areaAlvoHa:
+        areaAlvoBordaduraHa,
+      celulas: celulas.filter(
+        (celula) =>
+          celula.zonaTalhao ===
+          "faixa_avaliacao_bordadura",
+      ),
+    });
+
+  const celulasNucleo =
+    celulas.filter(
+      (celula) =>
+        celula.zonaTalhao ===
+        "nucleo_produtivo",
+    );
+
+  return [
+    ...celulasBordadura,
+    ...celulasNucleo,
+  ].map((celula, indice) => ({
+    ...celula,
+    numero: indice + 1,
+  }));
 }
