@@ -280,6 +280,8 @@ export function TalhaoEditorV2({
         selectedTalhao,
       );
 
+      onSelectTalhao(null);
+
       setDraft({
         nome:
           selectedTalhao.nome,
@@ -304,6 +306,7 @@ export function TalhaoEditorV2({
           "Selecione ou arraste somente os pontos que precisam de correção.",
       });
     }, [
+      onSelectTalhao,
       podeGerenciar,
       selectedTalhao,
     ]);
@@ -452,9 +455,7 @@ export function TalhaoEditorV2({
           );
           setTalhaoEmEdicao(null);
           setMode("visualizacao");
-          onSelectTalhao(
-            resultado.talhao,
-          );
+          onSelectTalhao(null);
           setMensagem({
             tipo: "sucesso",
             texto:
@@ -517,15 +518,13 @@ export function TalhaoEditorV2({
         setTalhaoEmEdicao(null);
         setMode("visualizacao");
 
-        onSelectTalhao(
-          resultado.talhao,
-        );
+        onSelectTalhao(null);
 
         setMensagem({
           tipo: "sucesso",
 
           texto:
-            `Talhão criado e selecionado com sucesso. ` +
+            `Talhão criado com sucesso. ` +
             `${totalUEIs} UEIs e ${totalGDAs} GDAs foram gerados.`,
         });
       } catch (error) {

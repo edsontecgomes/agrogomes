@@ -91,7 +91,7 @@ export function TalhaoHistorico({ talhao, onClose }: TalhaoHistoricoProps) {
 
   if (loadingExecs || loadingChuvas || loadingSegments) {
     return (
-      <div className="fixed inset-0 z-[150] bg-slate-50 flex items-center justify-center">
+      <div className="flex min-h-64 items-center justify-center rounded-[32px] border border-slate-200 bg-slate-50 shadow-sm">
         <div className="text-center">
           <div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-500 font-medium">Carregando Diário Agronômico...</p>
@@ -101,9 +101,9 @@ export function TalhaoHistorico({ talhao, onClose }: TalhaoHistoricoProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-[150] bg-slate-50 flex flex-col overflow-hidden">
+    <section className="relative w-full overflow-hidden rounded-[32px] border border-slate-200 bg-slate-50 shadow-sm">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm sticky top-0 z-10">
+      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
           <button 
             onClick={onClose}
@@ -114,7 +114,7 @@ export function TalhaoHistorico({ talhao, onClose }: TalhaoHistoricoProps) {
           <div>
             <h2 className="text-xl font-bold text-slate-900 leading-tight">{talhao.nome}</h2>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">
-              {talhao.area.toFixed(2)} Hectares • Diário Agronômico
+              {(talhao.area ?? 0).toFixed(2)} Hectares • Diário Agronômico
             </p>
           </div>
         </div>
@@ -139,7 +139,7 @@ export function TalhaoHistorico({ talhao, onClose }: TalhaoHistoricoProps) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      <div className="w-full">
         <div className="max-w-6xl mx-auto p-6 space-y-8">
           
           {/* Resumo Overview */}
@@ -274,7 +274,7 @@ export function TalhaoHistorico({ talhao, onClose }: TalhaoHistoricoProps) {
                                     <div className="mt-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-100 space-y-1.5 text-left">
                                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-0.5">Insumos e Consumo de Estoque</p>
                                       {matchedOrdem.produtos.map((p, pIdx) => {
-                                        const qtyConsumida = isAreaBased && talhao.area > 0 ? (p.dose || 0) * talhao.area : (p.dose || 0);
+                                        const qtyConsumida = isAreaBased && (talhao.area ?? 0) > 0 ? (p.dose || 0) * (talhao.area ?? 0) : (p.dose || 0);
                                         return (
                                           <div key={pIdx} className="flex justify-between items-center text-[11px] text-slate-700">
                                             <span className="font-bold text-slate-800">{p.nome || 'Insumo'}</span>
@@ -405,7 +405,7 @@ export function TalhaoHistorico({ talhao, onClose }: TalhaoHistoricoProps) {
           />
         )}
       </AnimatePresence>
-    </div>
+    </section>
   );
 }
 

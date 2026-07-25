@@ -208,6 +208,15 @@ export function TalhoesDashboard({
         </div>
       </header>
 
+      {selectedTalhao && (
+        <TalhaoHistorico
+          talhao={selectedTalhao}
+          onClose={() =>
+            setSelectedTalhao(null)
+          }
+        />
+      )}
+
       {versaoEditor === "v2" ? (
         <>
           {producerId ? (
@@ -311,15 +320,6 @@ export function TalhoesDashboard({
             </button>
           </div>
         </section>
-      )}
-
-      {selectedTalhao && (
-        <TalhaoHistorico
-          talhao={selectedTalhao}
-          onClose={() =>
-            setSelectedTalhao(null)
-          }
-        />
       )}
 
       <section>
