@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { getOfflineSyncQueue } from "../services/offlineSyncQueue";
+import {
+  getOfflineSyncQueue,
+  OFFLINE_SYNC_QUEUE_EVENT,
+} from "../services/offlineSyncQueue";
 import { processOfflineSyncQueue } from "../services/offlineSyncService";
 
 export function useOfflineSync() {
@@ -26,14 +29,38 @@ export function useOfflineSync() {
   useEffect(() => {
     refreshQueueSize();
 
+    function handleQueueChanged() {
+      refreshQueueSize();
+    }
+
     function handleOnline() {
       void syncNow();
     }
 
-    window.addEventListener("online", handleOnline);
+    window.addEventListener(
+      OFFLINE_SYNC_QUEUE_EVENT,
+      handleQueueChanged,
+    );
+
+    window.addEventListener(
+      "online",
+      handleOnline,
+    );
+
+    if (navigator.onLine) {
+      void syncNow();
+    }
 
     return () => {
-      window.removeEventListener("online", handleOnline);
+      window.removeEventListener(
+        OFFLINE_SYNC_QUEUE_EVENT,
+        handleQueueChanged,
+      );
+
+      window.removeEventListener(
+        "online",
+        handleOnline,
+      );
     };
   }, []);
 

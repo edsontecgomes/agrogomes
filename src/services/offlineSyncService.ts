@@ -15,45 +15,68 @@ import {
   updateOfflineSyncItem,
 } from "./offlineSyncQueue";
 
+function withCreateMetadata(
+  payload: Record<string, unknown>,
+) {
+  return {
+    ...payload,
+    ...(payload.createdAt === undefined
+      ? { createdAt: serverTimestamp() }
+      : {}),
+    syncedAt: serverTimestamp(),
+  };
+}
+
 async function syncCreate(
   collectionName: string,
   payload: Record<string, unknown>,
-  documentId?: string
+  documentId?: string,
 ) {
+  const data = withCreateMetadata(payload);
+
   if (documentId) {
-    await setDoc(doc(db, collectionName, documentId), {
-      ...payload,
-      syncedAt: serverTimestamp(),
-    });
+    await setDoc(
+      doc(db, collectionName, documentId),
+      data,
+    );
 
     return;
   }
 
-  await addDoc(collection(db, collectionName), {
-    ...payload,
-    syncedAt: serverTimestamp(),
-  });
+  await addDoc(
+    collection(db, collectionName),
+    data,
+  );
 }
 
 async function syncUpdate(
   collectionName: string,
   documentId: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
 ) {
-  await updateDoc(doc(db, collectionName, documentId), {
-    ...payload,
-    syncedAt: serverTimestamp(),
-  });
+  await updateDoc(
+    doc(db, collectionName, documentId),
+    {
+      ...payload,
+      syncedAt: serverTimestamp(),
+    },
+  );
 }
 
-async function syncDelete(collectionName: string, documentId: string) {
-  await deleteDoc(doc(db, collectionName, documentId));
+async function syncDelete(
+  collectionName: string,
+  documentId: string,
+) {
+  await deleteDoc(
+    doc(db, collectionName, documentId),
+  );
 }
 
 export async function processOfflineSyncQueue() {
   if (!navigator.onLine) return;
 
-  const pendingItems = getPendingOfflineSyncItems();
+  const pendingItems =
+    getPendingOfflineSyncItems();
 
   for (const item of pendingItems) {
     try {
@@ -66,28 +89,35 @@ export async function processOfflineSyncQueue() {
         await syncCreate(
           item.collectionName,
           item.payload,
-          item.documentId
+          item.documentId,
         );
       }
 
       if (item.operation === "update") {
         if (!item.documentId) {
-          throw new Error("documentId obrigatório para update.");
+          throw new Error(
+            "documentId obrigatório para update.",
+          );
         }
 
         await syncUpdate(
           item.collectionName,
           item.documentId,
-          item.payload
+          item.payload,
         );
       }
 
       if (item.operation === "delete") {
         if (!item.documentId) {
-          throw new Error("documentId obrigatório para delete.");
+          throw new Error(
+            "documentId obrigatório para delete.",
+          );
         }
 
-        await syncDelete(item.collectionName, item.documentId);
+        await syncDelete(
+          item.collectionName,
+          item.documentId,
+        );
       }
 
       removeOfflineSyncItem(item.id);

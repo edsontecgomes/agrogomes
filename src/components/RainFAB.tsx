@@ -14,10 +14,11 @@ import {
 import { usePluviometros } from '../hooks/usePluviometros';
 import { auth, db } from '../services/firebase';
 import { syncService } from '../services/syncService';
-import { collection, addDoc, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../utils/errorHandling';
 import { Pluviometro, RainFABProps } from '../types';
 import { HighPrecisionFixer } from './HighPrecisionFixer';
+import { criarPluviometroResiliente } from '../services/pluviometroService';
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
 /* ... standard getDistance ... */
@@ -101,6 +102,11 @@ export function RainFAB({ farmId, activeModule }: RainFABProps) {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth.currentUser) return;
+
+    if (!farmId) {
+      setError('Fazenda não identificada.');
+      return;
+    }
     
     setLoading(true);
     setError('');
@@ -111,14 +117,15 @@ export function RainFAB({ farmId, activeModule }: RainFABProps) {
 
       // Create new pluviometer if needed
       if (!selectedPluviometro && newPluviometroName.trim() && currentLocation) {
-        const pRef = await addDoc(collection(db, 'pluviometros'), {
+        const resultado = await criarPluviometroResiliente({
           nome: newPluviometroName.trim(),
           location: currentLocation,
           farmId,
-          createdAt: serverTimestamp()
         });
-        pId = pRef.id;
-        pLocation = currentLocation;
+
+        pId = resultado.pluviometro.id;
+        pLocation = resultado.pluviometro.location;
+        setSelectedPluviometro(resultado.pluviometro);
       }
 
       if (!pId || !pLocation) {

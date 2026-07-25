@@ -1,9 +1,26 @@
-import { OfflineSyncItem, OfflineSyncOperation } from "../types/offlineSync";
+import {
+  OfflineSyncItem,
+  OfflineSyncOperation,
+} from "../types/offlineSync";
 
-const OFFLINE_SYNC_QUEUE_KEY = "gestao_agro_offline_sync_queue";
+const OFFLINE_SYNC_QUEUE_KEY =
+  "gestao_agro_offline_sync_queue";
+
+export const OFFLINE_SYNC_QUEUE_EVENT =
+  "eqtara:offline-sync-queue-changed";
+
+function notifyQueueChanged() {
+  if (typeof window === "undefined") return;
+
+  window.dispatchEvent(
+    new CustomEvent(OFFLINE_SYNC_QUEUE_EVENT),
+  );
+}
 
 function readQueue(): OfflineSyncItem[] {
-  const raw = localStorage.getItem(OFFLINE_SYNC_QUEUE_KEY);
+  const raw = localStorage.getItem(
+    OFFLINE_SYNC_QUEUE_KEY,
+  );
 
   if (!raw) return [];
 
@@ -15,7 +32,12 @@ function readQueue(): OfflineSyncItem[] {
 }
 
 function writeQueue(queue: OfflineSyncItem[]) {
-  localStorage.setItem(OFFLINE_SYNC_QUEUE_KEY, JSON.stringify(queue));
+  localStorage.setItem(
+    OFFLINE_SYNC_QUEUE_KEY,
+    JSON.stringify(queue),
+  );
+
+  notifyQueueChanged();
 }
 
 export function getOfflineSyncQueue(): OfflineSyncItem[] {
@@ -23,7 +45,9 @@ export function getOfflineSyncQueue(): OfflineSyncItem[] {
 }
 
 export function getPendingOfflineSyncItems(): OfflineSyncItem[] {
-  return readQueue().filter((item) => item.status === "pendente");
+  return readQueue().filter(
+    (item) => item.status === "pendente",
+  );
 }
 
 export function addOfflineSyncItem(params: {
@@ -55,7 +79,7 @@ export function addOfflineSyncItem(params: {
 
 export function updateOfflineSyncItem(
   id: string,
-  updates: Partial<OfflineSyncItem>
+  updates: Partial<OfflineSyncItem>,
 ) {
   const queue = readQueue();
 
@@ -66,7 +90,7 @@ export function updateOfflineSyncItem(
           ...updates,
           updatedAt: new Date().toISOString(),
         }
-      : item
+      : item,
   );
 
   writeQueue(nextQueue);
@@ -75,11 +99,17 @@ export function updateOfflineSyncItem(
 export function removeOfflineSyncItem(id: string) {
   const queue = readQueue();
 
-  writeQueue(queue.filter((item) => item.id !== id));
+  writeQueue(
+    queue.filter((item) => item.id !== id),
+  );
 }
 
 export function clearSyncedOfflineItems() {
   const queue = readQueue();
 
-  writeQueue(queue.filter((item) => item.status !== "sincronizado"));
+  writeQueue(
+    queue.filter(
+      (item) => item.status !== "sincronizado",
+    ),
+  );
 }

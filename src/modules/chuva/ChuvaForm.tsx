@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { collection, doc, writeBatch, serverTimestamp, addDoc } from 'firebase/firestore';
+import React, { useMemo, useState, useEffect } from 'react';
+import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../services/firebase';
 import { syncService } from '../../services/syncService';
+import { criarPluviometroResiliente } from '../../services/pluviometroService';
 import { Pluviometro, ChuvaFormProps } from '../../types';
 import { handleFirestoreError, OperationType } from '../../utils/errorHandling';
 import { Droplets, Save, WifiOff, Crosshair, MapPin } from 'lucide-react';
@@ -33,9 +34,36 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
   const [nearbyConflict, setNearbyConflict] = useState<Pluviometro | null>(null);
   const [highlightSelect, setHighlightSelect] = useState(false);
   const [userOverridden, setUserOverridden] = useState(false);
+  const [pluviometrosLocais, setPluviometrosLocais] = useState<Pluviometro[]>([]);
 
   // Automatically fetch high-precision location on component mount without manual button clicks
   const gps = useHighPrecisionGeolocation(true, 30, 2, 15000);
+
+  const pluviometrosDisponiveis = useMemo(() => {
+    const porId = new Map<string, Pluviometro>();
+
+    for (const pluviometro of [
+      ...pluviometrosLocais,
+      ...pluviometros,
+    ]) {
+      porId.set(pluviometro.id, pluviometro);
+    }
+
+    return Array.from(porId.values());
+  }, [pluviometros, pluviometrosLocais]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const triggerHighlightAndVibrate = () => {
     if (navigator.vibrate) {
@@ -62,16 +90,16 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
 
       // Only perform auto-detection if the user has not manually overridden the select dropdown
       if (!userOverridden) {
-        if (pluviometros.length === 0) {
+        if (pluviometrosDisponiveis.length === 0) {
           setNewPluviometroMode(true);
           return;
         }
 
-        let closest = pluviometros[0];
+        let closest = pluviometrosDisponiveis[0];
         let minDistance = getDistance(loc.lat, loc.lng, closest.location.lat, closest.location.lng);
 
-        for (let i = 1; i < pluviometros.length; i++) {
-          const p = pluviometros[i];
+        for (let i = 1; i < pluviometrosDisponiveis.length; i++) {
+          const p = pluviometrosDisponiveis[i];
           const dist = getDistance(loc.lat, loc.lng, p.location.lat, p.location.lng);
           if (dist < minDistance) {
             minDistance = dist;
@@ -96,16 +124,21 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
         }
       }
     }
-  }, [gps.latitude, gps.longitude, gps.accuracy, pluviometros, userOverridden, pluviometroId, newPluviometroMode]);
+  }, [gps.latitude, gps.longitude, gps.accuracy, pluviometrosDisponiveis, userOverridden, pluviometroId, newPluviometroMode]);
 
   const handleCreatePluviometro = async () => {
     if (!newPluviometroName.trim() || !currentLocation) return;
+
+    if (!farmId) {
+      setError('Fazenda não identificada.');
+      return;
+    }
     
     // Check if there is already a pluviometro within 30 meters
     let closest: Pluviometro | null = null;
     let minDistance = Infinity;
 
-    for (const p of pluviometros) {
+    for (const p of pluviometrosDisponiveis) {
       const dist = getDistance(currentLocation.lat, currentLocation.lng, p.location.lat, p.location.lng);
       if (dist < minDistance) {
         minDistance = dist;
@@ -122,16 +155,37 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
     setError('');
     
     try {
-      const docRef = await addDoc(collection(db, 'pluviometros'), {
+      const resultado = await criarPluviometroResiliente({
         nome: newPluviometroName.trim(),
         location: currentLocation,
-        farmId
+        farmId,
       });
-      
-      setPluviometroId(docRef.id);
+
+      setPluviometrosLocais((atuais) => {
+        if (
+          atuais.some(
+            (item) =>
+              item.id === resultado.pluviometro.id,
+          )
+        ) {
+          return atuais;
+        }
+
+        return [
+          resultado.pluviometro,
+          ...atuais,
+        ];
+      });
+
+      setPluviometroId(resultado.pluviometro.id);
       setNewPluviometroMode(false);
+      setUserOverridden(true);
       setNewPluviometroName('');
-      setSuccessMessage('Pluviômetro criado e selecionado com sucesso!');
+      setSuccessMessage(
+        resultado.salvoOffline
+          ? 'Pluviômetro salvo localmente e selecionado. Será sincronizado automaticamente.'
+          : 'Pluviômetro criado e selecionado com sucesso!'
+      );
       setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err) {
       setError('Erro ao criar pluviômetro.');
@@ -151,6 +205,11 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
       return;
     }
 
+    if (!farmId) {
+      setError('Fazenda não identificada.');
+      return;
+    }
+
     if (!pluviometroId) {
       setError('Selecione um pluviômetro.');
       return;
@@ -165,7 +224,7 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
     setLoading(true);
 
     try {
-      const selectedPluviometro = pluviometros.find(p => p.id === pluviometroId);
+      const selectedPluviometro = pluviometrosDisponiveis.find(p => p.id === pluviometroId);
       if (!selectedPluviometro) {
         throw new Error('Pluviômetro não encontrado.');
       }
@@ -361,7 +420,7 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
               }`}
             >
               <option value="" disabled>Selecione um pluviômetro</option>
-              {pluviometros.map(p => (
+              {pluviometrosDisponiveis.map(p => (
                 <option key={p.id} value={p.id}>{p.nome}</option>
               ))}
             </select>
