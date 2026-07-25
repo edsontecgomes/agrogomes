@@ -70,7 +70,13 @@ export type TalhaoMapCanvasV2Props = {
 export type TalhaoFormV2Props = {
   draft: TalhaoDraft;
 
+  selectedTalhao: Talhao | null;
+
+  editando: boolean;
+
   loading: boolean;
+
+  podeGerenciar: boolean;
 
   podeSalvar: boolean;
 
@@ -81,6 +87,12 @@ export type TalhaoFormV2Props = {
   ): void;
 
   onIniciarDesenho(): void;
+
+  onIniciarNovoTalhao(): void;
+
+  onEditarTalhao(): void;
+
+  onExcluirTalhao(): void;
 
   onDesfazerPonto(): void;
 

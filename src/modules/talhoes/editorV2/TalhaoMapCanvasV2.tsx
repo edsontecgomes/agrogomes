@@ -308,6 +308,33 @@ export function TalhaoMapCanvasV2({
   const [zoomAtual, setZoomAtual] =
     useState(0);
 
+  const [
+    indiceVerticeSelecionado,
+    setIndiceVerticeSelecionado,
+  ] = useState<number | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (
+      mode !== "desenho" ||
+      (
+        indiceVerticeSelecionado !==
+          null &&
+        indiceVerticeSelecionado >=
+          coordenadasDesenho.length
+      )
+    ) {
+      setIndiceVerticeSelecionado(
+        null,
+      );
+    }
+  }, [
+    coordenadasDesenho.length,
+    indiceVerticeSelecionado,
+    mode,
+  ]);
+
   useEffect(() => {
     let ativo = true;
 
@@ -1017,6 +1044,9 @@ export function TalhaoMapCanvasV2({
       (coordenada, indice) => {
         const primeiroPonto =
           indice === 0;
+        const selecionado =
+          indiceVerticeSelecionado ===
+          indice;
 
         const marcador =
           new googleMaps.maps.Marker({
@@ -1025,20 +1055,28 @@ export function TalhaoMapCanvasV2({
             map:
               mapInstanceRef.current,
 
+            clickable: true,
+            draggable:
+              mode === "desenho",
+
             icon: {
               path:
                 googleMaps.maps
                   .SymbolPath.CIRCLE,
 
               scale:
-                primeiroPonto
-                  ? 7
-                  : 5,
+                selecionado
+                  ? 9
+                  : primeiroPonto
+                    ? 7
+                    : 5,
 
               fillColor:
-                primeiroPonto
-                  ? "#dc2626"
-                  : corDesenho,
+                selecionado
+                  ? "#f59e0b"
+                  : primeiroPonto
+                    ? "#dc2626"
+                    : corDesenho,
 
               fillOpacity: 1,
 
@@ -1048,11 +1086,67 @@ export function TalhaoMapCanvasV2({
               strokeWeight: 1.5,
             },
 
+            label: {
+              text: String(
+                indice + 1,
+              ),
+              color: "#ffffff",
+              fontSize: "10px",
+              fontWeight: "800",
+            },
+
             title:
-              primeiroPonto
-                ? "Primeiro ponto"
-                : `Ponto ${indice + 1}`,
+              `Ponto ${indice + 1}: toque para selecionar ou arraste para corrigir`,
           });
+
+        marcador.addListener(
+          "click",
+          (event: any) => {
+            event.domEvent
+              ?.stopPropagation?.();
+
+            setIndiceVerticeSelecionado(
+              indice,
+            );
+          },
+        );
+
+        marcador.addListener(
+          "dragstart",
+          () => {
+            setIndiceVerticeSelecionado(
+              indice,
+            );
+          },
+        );
+
+        marcador.addListener(
+          "dragend",
+          (event: any) => {
+            if (!event.latLng) {
+              return;
+            }
+
+            const atualizadas = [
+              ...coordenadasDesenho,
+            ];
+
+            atualizadas[indice] = {
+              lat:
+                event.latLng.lat(),
+              lng:
+                event.latLng.lng(),
+            };
+
+            onChangeCoordenadas(
+              atualizadas,
+            );
+
+            setIndiceVerticeSelecionado(
+              null,
+            );
+          },
+        );
 
         marcadoresDesenhoRef.current.push(
           marcador,
@@ -1089,6 +1183,9 @@ export function TalhaoMapCanvasV2({
     coordenadasDesenho,
     corDesenho,
     googleMaps,
+    indiceVerticeSelecionado,
+    mode,
+    onChangeCoordenadas,
     onAreaCalculada,
   ]);
 
@@ -1130,6 +1227,29 @@ export function TalhaoMapCanvasV2({
                 event.latLng.lng(),
             };
 
+          if (
+            indiceVerticeSelecionado !==
+            null
+          ) {
+            const atualizadas = [
+              ...coordenadasDesenho,
+            ];
+
+            atualizadas[
+              indiceVerticeSelecionado
+            ] = novaCoordenada;
+
+            onChangeCoordenadas(
+              atualizadas,
+            );
+
+            setIndiceVerticeSelecionado(
+              null,
+            );
+
+            return;
+          }
+
           onChangeCoordenadas([
             ...coordenadasDesenho,
             novaCoordenada,
@@ -1151,6 +1271,7 @@ export function TalhaoMapCanvasV2({
   }, [
     coordenadasDesenho,
     googleMaps,
+    indiceVerticeSelecionado,
     mode,
     onChangeCoordenadas,
   ]);
@@ -1280,13 +1401,16 @@ export function TalhaoMapCanvasV2({
       {mode === "desenho" &&
         !loading &&
         !erro && (
-          <div className="pointer-events-none absolute left-4 top-4 rounded-2xl bg-slate-950/85 px-4 py-3 text-white shadow-lg backdrop-blur">
+          <div className="pointer-events-none absolute left-4 top-4 max-w-[310px] rounded-2xl border border-white/20 bg-slate-950/85 px-4 py-3 text-white shadow-lg backdrop-blur">
             <p className="text-xs font-black uppercase tracking-widest text-emerald-300">
-              Desenho ativo
+              Ajuste dos vértices
             </p>
 
-            <p className="mt-1 text-xs text-slate-200">
-              Clique no mapa para adicionar os vértices do talhão.
+            <p className="mt-1 text-xs leading-relaxed text-slate-200">
+              {indiceVerticeSelecionado ===
+              null
+                ? "Toque no mapa para criar um ponto. Toque em um ponto numerado para selecioná-lo."
+                : `Ponto ${indiceVerticeSelecionado + 1} selecionado. Toque na nova posição ou arraste o marcador.`}
             </p>
 
             <p className="mt-2 text-xs font-bold text-white">
@@ -1302,7 +1426,7 @@ export function TalhaoMapCanvasV2({
             <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-600" />
 
             <p className="mt-3 text-sm font-bold text-slate-700">
-              Criando talhão, UEIs e GDAs...
+              Processando talhão, UEIs e GDAs...
             </p>
           </div>
         </div>

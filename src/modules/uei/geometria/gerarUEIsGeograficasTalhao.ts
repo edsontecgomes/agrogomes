@@ -147,7 +147,7 @@ export function gerarUEIsGeograficasTalhao(
           ),
 
         areaMinimaBordaduraHa:
-          0.01,
+          0.001,
       })
     : gerarGridGeograficoBasico({
         talhaoId:

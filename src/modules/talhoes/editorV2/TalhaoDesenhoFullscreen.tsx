@@ -88,7 +88,7 @@ export function TalhaoDesenhoFullscreen({
             </div>
 
             <p className="mt-0.5 text-[11px] text-slate-300 sm:text-xs">
-              Toque no mapa para marcar os vértices na ordem do perímetro.
+              Toque no mapa para criar pontos. Para corrigir, toque em um ponto e depois na nova posição, ou arraste-o.
             </p>
           </div>
         </div>

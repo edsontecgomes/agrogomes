@@ -14,6 +14,11 @@ import {
 } from "./cadastro/fluxoCriarTalhao";
 
 import {
+  atualizarTalhaoComEstrutura,
+  excluirTalhaoComEstrutura,
+} from "./cadastro/gerenciarTalhao";
+
+import {
   TalhaoDesenhoFullscreen,
 } from "./editorV2/TalhaoDesenhoFullscreen";
 
@@ -69,7 +74,34 @@ function mensagemErro(
     return error.message;
   }
 
-  return "Não foi possível criar o talhão.";
+  return "Não foi possível concluir a operação com o talhão.";
+}
+
+function obterCoordenadasTalhao(
+  talhao: Talhao,
+): LatLng[] {
+  if (
+    Array.isArray(talhao.coordenadas) &&
+    talhao.coordenadas.length >= 3
+  ) {
+    return talhao.coordenadas;
+  }
+
+  if (
+    Array.isArray(talhao.polygon) &&
+    talhao.polygon.length >= 3
+  ) {
+    return talhao.polygon;
+  }
+
+  if (
+    Array.isArray(talhao.pontos) &&
+    talhao.pontos.length >= 3
+  ) {
+    return talhao.pontos;
+  }
+
+  return [];
 }
 
 export function TalhaoEditorV2({
@@ -100,6 +132,13 @@ export function TalhaoEditorV2({
     setDesenhoTelaCheia,
   ] = useState(false);
 
+  const [
+    talhaoEmEdicao,
+    setTalhaoEmEdicao,
+  ] = useState<Talhao | null>(
+    null,
+  );
+
   const podeGerenciar =
     userRole === "produtor" ||
     userRole === "admin" ||
@@ -116,6 +155,13 @@ export function TalhaoEditorV2({
     podeGerenciar &&
     Boolean(producerIdNormalizado) &&
     talhaoDraftValido(draft);
+
+  const areaExibida =
+    draft.areaHa > 0
+      ? draft.areaHa
+      : selectedTalhao?.areaHa ??
+        selectedTalhao?.area ??
+        0;
 
   const atualizarNome =
     useCallback((nome: string) => {
@@ -190,10 +236,76 @@ export function TalhaoEditorV2({
       });
 
       onSelectTalhao(null);
-    }, [
+  }, [
       onSelectTalhao,
       podeGerenciar,
-      producerIdNormalizado,
+    producerIdNormalizado,
+  ]);
+
+  const iniciarNovoTalhao =
+    useCallback(() => {
+      setTalhaoEmEdicao(null);
+      setDraft(
+        copiarDraftInicial(),
+      );
+
+      iniciarDesenho();
+    }, [iniciarDesenho]);
+
+  const iniciarEdicaoTalhao =
+    useCallback(() => {
+      if (
+        !podeGerenciar ||
+        !selectedTalhao
+      ) {
+        return;
+      }
+
+      const coordenadas =
+        obterCoordenadasTalhao(
+          selectedTalhao,
+        );
+
+      if (coordenadas.length < 3) {
+        setMensagem({
+          tipo: "erro",
+          texto:
+            "O talhão selecionado não possui um limite válido para edição.",
+        });
+
+        return;
+      }
+
+      setTalhaoEmEdicao(
+        selectedTalhao,
+      );
+
+      setDraft({
+        nome:
+          selectedTalhao.nome,
+        coordenadas:
+          coordenadas.map(
+            (coordenada) => ({
+              ...coordenada,
+            }),
+          ),
+        areaHa:
+          selectedTalhao.areaHa ??
+          selectedTalhao.area ??
+          0,
+        bordaduraPercentual: 4,
+      });
+
+      setMode("desenho");
+      setDesenhoTelaCheia(true);
+      setMensagem({
+        tipo: "informacao",
+        texto:
+          "Selecione ou arraste somente os pontos que precisam de correção.",
+      });
+    }, [
+      podeGerenciar,
+      selectedTalhao,
     ]);
 
   const desfazerPonto =
@@ -232,7 +344,18 @@ export function TalhaoEditorV2({
 
       setMode("visualizacao");
       setMensagem(null);
-    }, []);
+
+      if (talhaoEmEdicao) {
+        onSelectTalhao(
+          talhaoEmEdicao,
+        );
+      }
+
+      setTalhaoEmEdicao(null);
+    }, [
+      onSelectTalhao,
+      talhaoEmEdicao,
+    ]);
 
   const avancarParaDados =
     useCallback(() => {
@@ -302,10 +425,46 @@ export function TalhaoEditorV2({
       setMensagem({
         tipo: "informacao",
         texto:
-          "Criando o talhão e sua estrutura agronômica...",
+          talhaoEmEdicao
+            ? "Atualizando o talhão e recalculando sua estrutura agronômica..."
+            : "Criando o talhão e sua estrutura agronômica...",
       });
 
       try {
+        if (talhaoEmEdicao) {
+          const resultado =
+            await atualizarTalhaoComEstrutura({
+              talhaoAtual:
+                talhaoEmEdicao,
+              producerId:
+                producerIdValido,
+              farmId,
+              nome:
+                draft.nome.trim(),
+              coordenadas:
+                draft.coordenadas,
+              areaHa:
+                draft.areaHa,
+            });
+
+          setDraft(
+            copiarDraftInicial(),
+          );
+          setTalhaoEmEdicao(null);
+          setMode("visualizacao");
+          onSelectTalhao(
+            resultado.talhao,
+          );
+          setMensagem({
+            tipo: "sucesso",
+            texto:
+              `Talhão atualizado com sucesso. ` +
+              `${resultado.totalUEIs} UEIs e ${resultado.totalGDAs} GDAs foram sincronizados.`,
+          });
+
+          return;
+        }
+
         const resultado =
           await executarFluxoCriarTalhao({
             farmId,
@@ -355,6 +514,7 @@ export function TalhaoEditorV2({
           copiarDraftInicial(),
         );
 
+        setTalhaoEmEdicao(null);
         setMode("visualizacao");
 
         onSelectTalhao(
@@ -388,6 +548,70 @@ export function TalhaoEditorV2({
       onSelectTalhao,
       podeGerenciar,
       producerId,
+      talhaoEmEdicao,
+    ]);
+
+  const excluirTalhao =
+    useCallback(async () => {
+      if (
+        !podeGerenciar ||
+        !selectedTalhao
+      ) {
+        return;
+      }
+
+      const confirmado =
+        window.confirm(
+          `Excluir o talhão "${selectedTalhao.nome}"?\n\nA exclusão será bloqueada automaticamente se já existir histórico operacional ou agronômico.`,
+        );
+
+      if (!confirmado) {
+        return;
+      }
+
+      setMode("salvando");
+      setMensagem({
+        tipo: "informacao",
+        texto:
+          "Verificando vínculos e excluindo a estrutura do talhão...",
+      });
+
+      try {
+        await excluirTalhaoComEstrutura({
+          talhao:
+            selectedTalhao,
+          farmId,
+        });
+
+        setDraft(
+          copiarDraftInicial(),
+        );
+        setTalhaoEmEdicao(null);
+        onSelectTalhao(null);
+        setMensagem({
+          tipo: "sucesso",
+          texto:
+            "Talhão de teste, suas UEIs e seus GDAs foram excluídos com segurança.",
+        });
+      } catch (error) {
+        console.error(
+          "Erro ao excluir talhão no Editor V2:",
+          error,
+        );
+
+        setMensagem({
+          tipo: "erro",
+          texto:
+            mensagemErro(error),
+        });
+      } finally {
+        setMode("visualizacao");
+      }
+    }, [
+      farmId,
+      onSelectTalhao,
+      podeGerenciar,
+      selectedTalhao,
     ]);
 
   const descricaoPermissao =
@@ -455,7 +679,7 @@ export function TalhaoEditorV2({
               </p>
 
               <p className="mt-1 text-lg font-black text-emerald-800">
-                {draft.areaHa.toFixed(2)} ha
+                {areaExibida.toFixed(2)} ha
               </p>
             </div>
           </div>
@@ -465,7 +689,16 @@ export function TalhaoEditorV2({
           <div className="lg:col-span-4">
             <TalhaoFormV2
               draft={draft}
+              selectedTalhao={
+                selectedTalhao
+              }
+              editando={Boolean(
+                talhaoEmEdicao,
+              )}
               loading={loading}
+              podeGerenciar={
+                podeGerenciar
+              }
               podeSalvar={podeSalvar}
               mensagem={
                 mensagemExibida
@@ -475,6 +708,15 @@ export function TalhaoEditorV2({
               }
               onIniciarDesenho={
                 iniciarDesenho
+              }
+              onIniciarNovoTalhao={
+                iniciarNovoTalhao
+              }
+              onEditarTalhao={
+                iniciarEdicaoTalhao
+              }
+              onExcluirTalhao={
+                excluirTalhao
               }
               onDesfazerPonto={
                 desfazerPonto
