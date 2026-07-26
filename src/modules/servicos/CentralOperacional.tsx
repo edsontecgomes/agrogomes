@@ -206,6 +206,10 @@ export function CentralOperacional({ farmId }: CentralOperacionalProps) {
                 activeExecutions.map(exec => {
                   const lastPoint = exec.path && exec.path.length > 0 ? exec.path[exec.path.length - 1] : null;
                   const ordem = ordens.find(o => o.id === exec.ordemId);
+                  const produtosExecucao =
+                    exec.produtos && exec.produtos.length > 0
+                      ? exec.produtos
+                      : ordem?.produtos || [];
                   
                   return (
                     <motion.div 
@@ -226,12 +230,13 @@ export function CentralOperacional({ farmId }: CentralOperacionalProps) {
                               {exec.implementoNome && <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">🛠️ {exec.implementoNome}</span>}
                             </p>
                           )}
-                          {ordem?.produtos && ordem.produtos.length > 0 && (
+                          {produtosExecucao.length > 0 && (
                             <div className="mt-2 text-[9px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 flex flex-wrap gap-1 items-center">
                               <span className="font-bold text-slate-600 block w-full text-[8px] uppercase tracking-wider mb-0.5">Insumos Planejados:</span>
-                              {ordem.produtos.map((p, pIdx) => (
+                              {produtosExecucao.map((p, pIdx) => (
                                 <span key={pIdx} className="bg-white border text-slate-700 px-1.5 py-0.5 rounded shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                                   📦 {p.nome || 'Produto'}: {p.dose} {p.unidade}
+                                  {p.lote ? ` • lote ${p.lote}` : ''}
                                 </span>
                               ))}
                             </div>

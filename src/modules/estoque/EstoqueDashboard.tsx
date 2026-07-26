@@ -57,6 +57,7 @@ export function EstoqueDashboard({ farmId }: EstoqueDashboardProps) {
   const [unidade, setUnidade] = useState<typeof UNIDADES[number]>('kg');
   const [estoqueAtual, setEstoqueAtual] = useState<number>(0);
   const [estoqueMinimo, setEstoqueMinimo] = useState<number>(0);
+  const [lote, setLote] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
 
   const openNewModal = () => {
@@ -66,6 +67,7 @@ export function EstoqueDashboard({ farmId }: EstoqueDashboardProps) {
     setUnidade('kg');
     setEstoqueAtual(0);
     setEstoqueMinimo(0);
+    setLote('');
     setShowModal(true);
   };
 
@@ -76,6 +78,7 @@ export function EstoqueDashboard({ farmId }: EstoqueDashboardProps) {
     setUnidade(product.unidade as any);
     setEstoqueAtual(product.estoqueAtual);
     setEstoqueMinimo(product.estoqueMinimo);
+    setLote(product.lote || '');
     setShowModal(true);
   };
 
@@ -92,6 +95,7 @@ export function EstoqueDashboard({ farmId }: EstoqueDashboardProps) {
           unidade,
           estoqueAtual,
           estoqueMinimo,
+          lote: lote.trim() || null,
         });
       } else {
         await criarProduto(
@@ -99,7 +103,8 @@ export function EstoqueDashboard({ farmId }: EstoqueDashboardProps) {
           categoria,
           unidade,
           estoqueAtual,
-          estoqueMinimo
+          estoqueMinimo,
+          lote
         );
       }
       setShowModal(false);
@@ -369,6 +374,11 @@ export function EstoqueDashboard({ farmId }: EstoqueDashboardProps) {
                   <h3 className="font-sans font-bold text-slate-800 text-lg group-hover:text-emerald-700 transition-colors">
                     {p.nome}
                   </h3>
+                  {p.lote && (
+                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                      Lote: {p.lote}
+                    </p>
+                  )}
 
                   {/* Stock Levels progress visualizer */}
                   <div className="mt-6 space-y-2">
@@ -450,6 +460,22 @@ export function EstoqueDashboard({ farmId }: EstoqueDashboardProps) {
                   placeholder="Ex: Ureia Super N, Glifosato WG, etc."
                   className="w-full h-12 px-4 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm transition-all"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5 font-sans">
+                  Lote ou identificação do material
+                </label>
+                <input
+                  type="text"
+                  value={lote}
+                  onChange={(e) => setLote(e.target.value)}
+                  placeholder="Ex: Lote 24A, cultivar XYZ"
+                  className="w-full h-12 px-4 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm transition-all"
+                />
+                <p className="mt-1.5 text-[11px] text-slate-400">
+                  Esta identificação acompanhará a ordem e a execução no campo.
+                </p>
               </div>
 
               {/* Category & Unit (Two columns on grid desktop) */}

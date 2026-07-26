@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useOrdensServico } from '../../hooks/useServicos';
 import { useEstoque } from '../../hooks/useEstoque';
+import { useProdutosEstoque } from '../../hooks/useProdutosEstoque';
 import { useUsuario, useUsuarios } from '../../hooks/useUsuarios';
 import { useTalhoes } from '../../hooks/useTalhoes';
 import { OrdensList } from './OrdensList';
@@ -9,23 +10,56 @@ import { ExecucoesMap } from './ExecucoesMap';
 import { ChecklistTemplates } from './ChecklistTemplates';
 import { ClipboardList, Package, Map as MapIcon, ClipboardCheck } from 'lucide-react';
 
-import { useFarm } from '../../contexts/FarmContext';
-
 interface ServicosDashboardProps {
   farmId: string;
 }
 
 export function ServicosDashboard({ farmId }: ServicosDashboardProps) {
-  const { activeFarm } = useFarm();
   const { usuario, loading: loadingUser } = useUsuario(farmId);
   const { ordens, loading: loadingOrdens } = useOrdensServico(farmId);
-  const { estoque, loading: loadingEstoque } = useEstoque(farmId);
+  const { estoque: estoqueLegado, loading: loadingEstoqueLegado } = useEstoque(farmId);
+  const { produtos, loading: loadingProdutos } = useProdutosEstoque(farmId);
   const { usuarios, loading: loadingUsuarios } = useUsuarios(farmId);
   const { talhoes, loading: loadingTalhoes } = useTalhoes(farmId);
+
+  const estoqueOperacional = useMemo(() => {
+    const produtosAtuais = produtos
+      .filter(produto => produto.ativo)
+      .map(produto => ({
+        id: produto.id,
+        nome: produto.nome,
+        tipo: produto.categoria,
+        quantidadeAtual: produto.estoqueAtual,
+        unidade: produto.unidade,
+        lote: produto.lote || undefined,
+        farmId: produto.farmId,
+        updatedAt: produto.updatedAt instanceof Date
+          ? produto.updatedAt
+          : new Date(),
+        origemEstoque: 'produtos' as const
+      }));
+
+    const idsAtuais = new Set(produtosAtuais.map(produto => produto.id));
+    const itensLegados = estoqueLegado
+      .filter(item => !idsAtuais.has(item.id))
+      .map(item => ({
+        ...item,
+        origemEstoque: 'estoque' as const
+      }));
+
+    return [...produtosAtuais, ...itensLegados];
+  }, [estoqueLegado, produtos]);
   
   const [activeTab, setActiveTab] = useState<'ordens' | 'estoque' | 'mapa' | 'checklists'>('ordens');
 
-  if (loadingUser || loadingOrdens || loadingEstoque || loadingUsuarios || loadingTalhoes) {
+  if (
+    loadingUser ||
+    loadingOrdens ||
+    loadingEstoqueLegado ||
+    loadingProdutos ||
+    loadingUsuarios ||
+    loadingTalhoes
+  ) {
     return (
       <div className="flex items-center justify-center p-12">
         <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
@@ -126,17 +160,17 @@ export function ServicosDashboard({ farmId }: ServicosDashboardProps) {
           userRole={userRole} 
           usuarios={usuarios} 
           usuarioId={usuario.id}
-          estoque={estoque}
+          estoque={estoqueOperacional}
           talhoes={talhoes}
         />
       )}
       
       {activeTab === 'estoque' && (
-        <EstoqueList estoque={estoque} farmId={farmId} userRole={usuario.role} />
+        <EstoqueList estoque={estoqueLegado} farmId={farmId} userRole={usuario.role} />
       )}
 
       {activeTab === 'mapa' && (
-        <ExecucoesMap farmId={farmId} usuarios={usuarios} estoque={estoque} />
+        <ExecucoesMap farmId={farmId} usuarios={usuarios} estoque={estoqueOperacional} />
       )}
 
       {activeTab === 'checklists' && canManage && (

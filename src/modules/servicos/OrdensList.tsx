@@ -34,6 +34,8 @@ interface OrdensListProps {
   estoque: Estoque[];
 }
 
+type ProdutoOrdem = NonNullable<OrdemServico['produtos']>[number];
+
 export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, estoque }: OrdensListProps) {
   const { 
     ordens, 
@@ -52,7 +54,7 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
   const [tipoOperacao, setTipoOperacao] = useState<OrdemServico['tipoOperacao']>('Outros');
   const [talhaoId, setTalhaoId] = useState('');
   const [larguraOperacional, setLarguraOperacional] = useState<number>(0);
-  const [osProdutos, setOsProdutos] = useState<{ produtoId: string; nome: string; dose?: number; unidade?: string }[]>([]);
+  const [osProdutos, setOsProdutos] = useState<ProdutoOrdem[]>([]);
   const [maquinaId, setMaquinaId] = useState('');
   const [implementoId, setImplementoId] = useState('');
   
@@ -75,6 +77,41 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
   const [machineModalFinish, setMachineModalFinish] = useState<{ordem: OrdemServico, execucaoId: string} | null>(null);
 
   const canManage = userRole === 'admin' || userRole === 'gerente';
+
+  const encontrarItemEstoque = (produto: {
+    produtoId: string;
+    origemEstoque?: 'produtos' | 'estoque';
+  }) => {
+    return estoque.find(item =>
+      item.id === produto.produtoId &&
+      (
+        !produto.origemEstoque ||
+        item.origemEstoque === produto.origemEstoque
+      )
+    ) || estoque.find(item => item.id === produto.produtoId);
+  };
+
+  const enriquecerProduto = (produto: ProdutoOrdem): ProdutoOrdem => {
+    const itemEstoque = encontrarItemEstoque(produto);
+    const {
+      categoria: categoriaProduto,
+      lote: loteProduto,
+      origemEstoque: origemProduto,
+      ...dadosProduto
+    } = produto;
+    const categoria = categoriaProduto || itemEstoque?.tipo;
+    const lote = loteProduto || itemEstoque?.lote;
+
+    return {
+      ...dadosProduto,
+      ...(categoria ? { categoria } : {}),
+      ...(lote ? { lote } : {}),
+      origemEstoque:
+        origemProduto ||
+        itemEstoque?.origemEstoque ||
+        'estoque'
+    };
+  };
 
   const tiposOperacao: OrdemServico['tipoOperacao'][] = [
     'Plantio',
@@ -131,6 +168,7 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
         maquinaNome: ordem.maquinaNome || null,
         implementoId: ordem.implementoId || null,
         implementoNome: ordem.implementoNome || null,
+        produtos: ordem.produtos || [],
         ...(horimetroInicial !== undefined ? { horimetroInicial } : {})
       });
 
@@ -207,13 +245,26 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
       if (ordem.produtos && ordem.produtos.length > 0) {
         for (const p of ordem.produtos) {
           const qtyConsumida = isAreaBased && area > 0 ? (p.dose || 0) * area : (p.dose || 0);
+          const itemEstoque = encontrarItemEstoque(p);
+          const origemEstoque =
+            p.origemEstoque ||
+            itemEstoque?.origemEstoque ||
+            'estoque';
 
           // Update stock
-          const stockRef = doc(db, 'estoque', p.produtoId);
-          batch.update(stockRef, {
-            quantidadeAtual: increment(-qtyConsumida),
-            updatedAt: serverTimestamp()
-          });
+          const stockRef = doc(db, origemEstoque, p.produtoId);
+          batch.update(
+            stockRef,
+            origemEstoque === 'produtos'
+              ? {
+                  estoqueAtual: increment(-qtyConsumida),
+                  updatedAt: serverTimestamp()
+                }
+              : {
+                  quantidadeAtual: increment(-qtyConsumida),
+                  updatedAt: serverTimestamp()
+                }
+          );
 
           // Create movement
           const movRef = doc(collection(db, 'movimentacoes_estoque'));
@@ -221,8 +272,13 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
             id: movRef.id,
             produtoId: p.produtoId,
             produtoNome: p.nome || '',
+            categoria: p.categoria || itemEstoque?.tipo || null,
+            lote: p.lote || itemEstoque?.lote || null,
+            unidade: p.unidade || itemEstoque?.unidade || null,
+            dose: p.dose || 0,
             quantidade: qtyConsumida,
             tipo: 'saida',
+            origemEstoque,
             ordemId: ordem.id,
             execucaoId,
             farmId,
@@ -280,7 +336,7 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
       if (ordem.produtos && ordem.produtos.length > 0) {
         for (const p of ordem.produtos) {
           const qtyRequired = isAreaBased && area > 0 ? (p.dose || 0) * area : (p.dose || 0);
-          const stockItem = estoque.find(e => e.id === p.produtoId);
+          const stockItem = encontrarItemEstoque(p);
           const currentQty = stockItem ? stockItem.quantidadeAtual : 0;
           if (currentQty < qtyRequired) {
             insufficientList.push({
@@ -373,13 +429,15 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
 
             const selectedMaquina = equipamentos.find(eq => eq.id === maquinaId);
             const selectedImplemento = equipamentos.find(eq => eq.id === implementoId);
+            const produtosNormalizados = osProdutos.map(enriquecerProduto);
+
             await criarOrdem({
               titulo,
               descricao,
               tipoOperacao,
               talhaoId,
               larguraOperacional,
-              produtos: osProdutos,
+              produtos: produtosNormalizados,
               maquinaId: maquinaId || undefined,
               maquinaNome: selectedMaquina ? selectedMaquina.nome : undefined,
               implementoId: implementoId || undefined,
@@ -516,7 +574,10 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
                                 </span>
                               )}
                             </span>
-                            <span className="text-[10px] text-slate-500 font-medium">Dose: {p.dose} {p.unidade}</span>
+                            <span className="text-[10px] text-slate-500 font-medium">
+                              Dose: {p.dose} {p.unidade}
+                              {p.lote ? ` • Lote: ${p.lote}` : ''}
+                            </span>
                           </div>
                           <button
                             type="button"
@@ -546,7 +607,9 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
                           .filter(e => !osProdutos.some(op => op.produtoId === e.id))
                           .map(e => (
                             <option key={e.id} value={e.id}>
-                              {e.nome} ({e.quantidadeAtual} {e.unidade} disp.)
+                              {e.nome}
+                              {e.lote ? ` • lote ${e.lote}` : ''}
+                              {' '}({e.quantidadeAtual} {e.unidade} disp.)
                             </option>
                           ))
                         }
@@ -579,7 +642,10 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
                           produtoId: selected.id,
                           nome: selected.nome,
                           dose: parseFloat(doseInput),
-                          unidade: selected.unidade
+                          unidade: selected.unidade,
+                          categoria: selected.tipo,
+                          lote: selected.lote,
+                          origemEstoque: selected.origemEstoque || 'estoque'
                         }]);
                         setSelectedProdutoId('');
                         setDoseInput('');

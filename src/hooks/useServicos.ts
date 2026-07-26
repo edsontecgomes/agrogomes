@@ -320,6 +320,7 @@ export function useExecucoesServico(
       let maquinaNome = null;
       let implementoId = null;
       let implementoNome = null;
+      let produtos: OrdemServico['produtos'] = [];
 
       try {
         const orderSnap = await getDoc(
@@ -333,6 +334,7 @@ export function useExecucoesServico(
           maquinaNome = orderData.maquinaNome || null;
           implementoId = orderData.implementoId || null;
           implementoNome = orderData.implementoNome || null;
+          produtos = orderData.produtos || [];
         }
       } catch {
         console.warn(
@@ -353,7 +355,8 @@ export function useExecucoesServico(
         maquinaId,
         maquinaNome,
         implementoId,
-        implementoNome
+        implementoNome,
+        produtos
       };
 
       if (!navigator.onLine) {

@@ -103,7 +103,8 @@ export function useProdutosEstoque(farmId: string | null) {
     categoria: string,
     unidade: string,
     estoqueAtual: number,
-    estoqueMinimo: number
+    estoqueMinimo: number,
+    lote?: string
   ) => {
     if (!farmId) throw new Error('Farm ID é necessário');
     const producerId = activeFarm?.producerId || auth.currentUser?.uid || '';
@@ -119,6 +120,7 @@ export function useProdutosEstoque(farmId: string | null) {
         unidade,
         estoqueAtual,
         estoqueMinimo,
+        lote: lote?.trim() || null,
         ativo: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()

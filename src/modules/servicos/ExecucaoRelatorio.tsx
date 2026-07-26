@@ -132,6 +132,10 @@ export function ExecucaoRelatorio({
   const timeline = useMemo(() => {
     return gerarTimelineExecucao(exec);
   }, [exec]);
+  const produtosAplicados =
+    exec.produtos && exec.produtos.length > 0
+      ? exec.produtos
+      : ordem?.produtos || [];
 
   if (!exec || !metricas) return null;
 
@@ -264,7 +268,7 @@ export function ExecucaoRelatorio({
         </div>
 
         {/* Seção Insumos Aplicados */}
-        {ordem?.produtos && ordem.produtos.length > 0 && (
+        {produtosAplicados.length > 0 && (
           <motion.section
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -278,8 +282,8 @@ export function ExecucaoRelatorio({
              </div>
 
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {ordem.produtos.map((p, idx) => {
-                  const isAreaBased = ['Plantio', 'Pulverizacao', 'Adubacao'].includes(ordem.tipoOperacao);
+                {produtosAplicados.map((p, idx) => {
+                  const isAreaBased = ['Plantio', 'Pulverizacao', 'Adubacao'].includes(ordem?.tipoOperacao || '');
                   const area = talhao?.area || 0;
                   const qtyConsumida = isAreaBased && area > 0 ? (p.dose || 0) * area : (p.dose || 0);
 
@@ -288,6 +292,11 @@ export function ExecucaoRelatorio({
                        <div>
                           <p className="font-bold text-slate-800">{p.nome || 'Insumo'}</p>
                           <p className="text-xs text-slate-500 font-medium">Dose recomendada: {p.dose} {p.unidade}/{isAreaBased ? 'ha' : 'un'}</p>
+                          {p.lote && (
+                            <p className="mt-1 text-xs font-bold text-blue-700">
+                              Lote/material: {p.lote}
+                            </p>
+                          )}
                        </div>
                        <div className="text-right">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Consumido</p>

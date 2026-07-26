@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   Clock,
   MapPin,
+  Package,
   PlayCircle,
   Radar,
   StopCircle,
@@ -115,6 +116,24 @@ export function OrdemCard({
                     🛠️ {ordem.implementoNome}
                   </span>
                 )}
+              </div>
+            )}
+
+            {ordem.produtos && ordem.produtos.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {ordem.produtos.map(produto => (
+                  <span
+                    key={`${produto.produtoId}-${produto.lote || 'sem-lote'}`}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-blue-700 bg-blue-50 rounded-lg border border-blue-100"
+                  >
+                    <Package className="w-3 h-3" />
+                    {produto.nome}
+                    {produto.lote ? ` • lote ${produto.lote}` : ''}
+                    {produto.dose !== undefined
+                      ? ` • ${produto.dose} ${produto.unidade || ''}/ha`
+                      : ''}
+                  </span>
+                ))}
               </div>
             )}
 

@@ -95,6 +95,9 @@ export interface OrdemServico {
     nome: string;
     dose?: number;
     unidade?: string;
+    categoria?: string;
+    lote?: string;
+    origemEstoque?: "produtos" | "estoque";
   }>;
   configuracoes?: {
     autoStartPorGeofence?: boolean;
@@ -146,6 +149,15 @@ export interface ExecucaoServico {
   produtoUsado?: string;
   semente?: string;
   lote?: string;
+  produtos?: Array<{
+    produtoId: string;
+    nome: string;
+    dose?: number;
+    unidade?: string;
+    categoria?: string;
+    lote?: string;
+    origemEstoque?: "produtos" | "estoque";
+  }>;
   maquinaId?: string;
   maquinaNome?: string;
   implementoId?: string;
@@ -232,6 +244,7 @@ export interface Estoque {
   validade?: Date;
   farmId: string;
   updatedAt: Date;
+  origemEstoque?: "produtos" | "estoque";
 }
 
 export interface Talhao {
@@ -268,6 +281,7 @@ export interface ProdutoEstoque {
   unidade: string;
   estoqueAtual: number;
   estoqueMinimo: number;
+  lote?: string | null;
   ativo: boolean;
   createdAt?: any;
   updatedAt?: any;
