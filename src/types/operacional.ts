@@ -242,6 +242,7 @@ export interface ChecklistTemplate {
 
 export interface ChecklistResposta {
   id: string;
+  farmId: string;
   ordemId: string;
   execucaoId?: string;
   operadorId: string;
@@ -260,6 +261,8 @@ export interface OfflineEvent {
     | "UPDATE_EXECUCAO"
     | "ADD_PATH_POINT"
     | "CREATE_SEGMENTO"
+    | "UPDATE_ORDEM_SERVICO"
+    | "CREATE_HORIMETRO"
     | "CREATE_CHUVA"
     | "SUBMIT_CHECKLIST";
   payload: any;

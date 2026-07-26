@@ -80,7 +80,10 @@ export function ChecklistRunner({
 
     setSubmitting(true);
     try {
-      const respostaPayload: Omit<ChecklistResposta, 'id' | 'createdAt'> = {
+      const respostaPayload: Omit<
+        ChecklistResposta,
+        'id' | 'createdAt' | 'farmId'
+      > = {
         ordemId,
         operadorId,
         checklistId: activeTemplate.id,
@@ -90,20 +93,29 @@ export function ChecklistRunner({
         }))
       };
 
-      // We don't have a returned ID immediately from submitResponse (it uses addDoc which returns a Promise<DocumentReference>)
-      // Returning a string ID might be tricky with our current submitResponse wrapper. 
-      // Let's just finish.
-      await submitResponse(respostaPayload);
+      const responseId =
+        await submitResponse(
+          respostaPayload
+        );
       
       enviarNotificacao({
         farmId,
-        tipo: 'SINCRONIZADO',
+        tipo: navigator.onLine
+          ? 'SINCRONIZADO'
+          : 'OFFLINE',
         titulo: 'Checklist Concluído',
-        mensagem: `O checklist para a operação de ${tipoOperacao} foi registrado com sucesso.`,
-        severidade: 'info'
+        mensagem: navigator.onLine
+          ? `O checklist para a operação de ${tipoOperacao} foi registrado com sucesso.`
+          : `O checklist de ${tipoOperacao} foi salvo no aparelho e será sincronizado quando a conexão voltar.`,
+        severidade: navigator.onLine
+          ? 'info'
+          : 'warning'
       });
 
-      onComplete('checklist-done'); // Dummy ID since we don't return it yet
+      onComplete(
+        responseId ||
+          'checklist-offline'
+      );
     } catch (err) {
       setError('Erro ao salvar checklist. Tente novamente.');
       setSubmitting(false);

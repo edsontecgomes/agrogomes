@@ -13,6 +13,14 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '../services/firebase';
+import {
+  cacheChecklistTemplates,
+  getCachedChecklistTemplates,
+  getLocalChecklistResponses,
+  mergeById,
+  OFFLINE_OPERATIONAL_STORE_EVENT,
+  upsertLocalChecklistResponse
+} from '../services/offlineOperationalStore';
 import { syncService } from '../services/syncService';
 import {
   ChecklistResposta,
@@ -35,7 +43,31 @@ export function useChecklistOrdemResponse(
       return;
     }
 
+    const readLocalResponse = () => {
+      const localResponse =
+        getLocalChecklistResponses(
+          farmId
+        )
+          .filter(
+            item =>
+              item.ordemId === ordemId
+          )
+          .sort(
+            (a, b) =>
+              b.createdAt.getTime() -
+              a.createdAt.getTime()
+          )[0] || null;
+
+      setResponse(localResponse);
+    };
+
+    readLocalResponse();
     setLoading(true);
+
+    window.addEventListener(
+      OFFLINE_OPERATIONAL_STORE_EVENT,
+      readLocalResponse
+    );
 
     const consulta = query(
       collection(db, 'checklist_respostas'),
@@ -49,7 +81,7 @@ export function useChecklistOrdemResponse(
       consulta,
       snapshot => {
         if (snapshot.empty) {
-          setResponse(null);
+          readLocalResponse();
           setLoading(false);
           return;
         }
@@ -64,6 +96,15 @@ export function useChecklistOrdemResponse(
             data.createdAt?.toDate() || new Date()
         } as ChecklistResposta);
 
+        upsertLocalChecklistResponse({
+          id: documento.id,
+          ...data,
+          farmId,
+          createdAt:
+            data.createdAt?.toDate() ||
+            new Date()
+        } as ChecklistResposta);
+
         setLoading(false);
       },
       error => {
@@ -71,12 +112,18 @@ export function useChecklistOrdemResponse(
           'Erro ao carregar resposta do checklist:',
           error
         );
-        setResponse(null);
+        readLocalResponse();
         setLoading(false);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_OPERATIONAL_STORE_EVENT,
+        readLocalResponse
+      );
+    };
   }, [ordemId, farmId]);
 
   return { response, loading };
@@ -98,7 +145,21 @@ export function useChecklistTemplates(
       return;
     }
 
+    const readCachedTemplates = () => {
+      setTemplates(
+        getCachedChecklistTemplates(
+          farmId
+        )
+      );
+    };
+
+    readCachedTemplates();
     setLoading(true);
+
+    window.addEventListener(
+      OFFLINE_OPERATIONAL_STORE_EVENT,
+      readCachedTemplates
+    );
 
     const consulta = query(
       collection(db, 'checklist_templates'),
@@ -121,6 +182,10 @@ export function useChecklistTemplates(
         }) as ChecklistTemplate[];
 
         setTemplates(dados);
+        cacheChecklistTemplates(
+          farmId,
+          dados
+        );
         setLoading(false);
       },
       error => {
@@ -128,12 +193,18 @@ export function useChecklistTemplates(
           'Erro ao carregar modelos de checklist:',
           error
         );
-        setTemplates([]);
+        readCachedTemplates();
         setLoading(false);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_OPERATIONAL_STORE_EVENT,
+        readCachedTemplates
+      );
+    };
   }, [farmId]);
 
   const saveTemplate = async (
@@ -186,7 +257,31 @@ export function useChecklistResponses(
       return;
     }
 
+    let remoteResponses:
+      ChecklistResposta[] = [];
+
+    const refreshResponses = () => {
+      setResponses(
+        mergeById(
+          remoteResponses,
+          getLocalChecklistResponses(
+            farmId
+          )
+        ).sort(
+          (a, b) =>
+            b.createdAt.getTime() -
+            a.createdAt.getTime()
+        )
+      );
+    };
+
+    refreshResponses();
     setLoading(true);
+
+    window.addEventListener(
+      OFFLINE_OPERATIONAL_STORE_EVENT,
+      refreshResponses
+    );
 
     const consulta = query(
       collection(db, 'checklist_respostas'),
@@ -208,7 +303,8 @@ export function useChecklistResponses(
           };
         }) as ChecklistResposta[];
 
-        setResponses(dados);
+        remoteResponses = dados;
+        refreshResponses();
         setLoading(false);
       },
       error => {
@@ -216,26 +312,58 @@ export function useChecklistResponses(
           'Erro ao carregar checklists respondidos:',
           error
         );
-        setResponses([]);
+        refreshResponses();
         setLoading(false);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_OPERATIONAL_STORE_EVENT,
+        refreshResponses
+      );
+    };
   }, [farmId]);
 
   const submitResponse = async (
     resposta: Omit<
       ChecklistResposta,
-      'id' | 'createdAt'
+      'id' | 'createdAt' | 'farmId'
     >
   ) => {
     if (!farmId) return;
 
-    syncService.enqueue('SUBMIT_CHECKLIST', {
+    const responseId = doc(
+      collection(
+        db,
+        'checklist_respostas'
+      )
+    ).id;
+    const createdAt = new Date();
+    const localResponse: ChecklistResposta = {
+      id: responseId,
       ...resposta,
-      farmId
+      farmId,
+      createdAt
+    };
+
+    upsertLocalChecklistResponse(
+      localResponse
+    );
+
+    const {
+      createdAt: _createdAt,
+      ...responsePayload
+    } = localResponse;
+
+    syncService.enqueue('SUBMIT_CHECKLIST', {
+      ...responsePayload,
+      createdAtMs:
+        createdAt.getTime()
     });
+
+    return responseId;
   };
 
   return {

@@ -26,6 +26,7 @@ import {
 import { syncService } from '../../services/syncService';
 import { enviarNotificacao, useNotificacoes } from '../../hooks/useNotificacoes';
 import { useMinhasExecucoesAtivas, useOrdensServico, useTodasExecucoesServico } from '../../hooks/useServicos';
+import { useChecklistTemplates } from '../../hooks/useChecklists';
 import { useTalhoes } from '../../hooks/useTalhoes';
 import { useChuvasComunitarias } from '../../hooks/useChuvasComunitarias';
 import { usePluviometros } from '../../hooks/usePluviometros';
@@ -34,9 +35,13 @@ import { CentralOperacional } from '../servicos/CentralOperacional';
 import { calcularDistancia } from '../../utils/geoUtils';
 import { formatarDuracao } from '../../utils/reportUtils';
 import { motion, AnimatePresence } from 'motion/react';
-import { auth, db } from '../../services/firebase';
-import { addDoc, collection, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
-import { handleFirestoreError, OperationType } from '../../utils/errorHandling';
+import { auth } from '../../services/firebase';
+import {
+  finalizarExecucaoOperacional,
+  iniciarExecucaoOperacional,
+  pausarExecucaoOperacional,
+  retomarExecucaoOperacional
+} from '../../services/operacaoOfflineService';
 import { ChuvaForm } from '../chuva/ChuvaForm';
 import { ChecklistRunner } from '../servicos/ChecklistRunner';
 import { NotificationCenter } from './NotificationCenter';
@@ -51,7 +56,8 @@ interface OperadorDashboardProps {
 export function OperadorDashboard({ farmId, usuario }: OperadorDashboardProps) {
   const { activeFarm } = useFarm();
   const { execucoesAtivas, loading: loadingActive } = useMinhasExecucoesAtivas(farmId);
-  const { ordens, loading: loadingOrdens, atualizarStatusOS } = useOrdensServico(farmId);
+  const { ordens, loading: loadingOrdens } = useOrdensServico(farmId);
+  useChecklistTemplates(farmId);
   const { execucoes: todasExecucoes, loading: loadingHistory } = useTodasExecucoesServico(farmId);
   const { notificacoes, unreadCount } = useNotificacoes(farmId);
   const currentFarmId = farmId;
@@ -190,23 +196,23 @@ export function OperadorDashboard({ farmId, usuario }: OperadorDashboardProps) {
 
   const handleStartExec = async (ordem: OrdemServico) => {
     try {
-        await addDoc(collection(db, 'execucoes_servico'), {
-          ordemId: ordem.id,
+        await iniciarExecucaoOperacional({
+          ordem,
           farmId,
-          talhaoId: ordem.talhaoId,
-          operadorId: auth.currentUser?.uid,
-          operadorNome: auth.currentUser?.displayName || 'Operador',
-          status: 'em_execucao',
-          origemStart: 'manual',
-          locationStart: currentLocation ? { ...currentLocation, accuracy: gpsAccuracy || 0 } : null,
-          dataInicio: serverTimestamp(),
-          createdAt: serverTimestamp(),
-          path: []
+          operadorId:
+            auth.currentUser?.uid,
+          operadorNome:
+            auth.currentUser?.displayName ||
+            'Operador',
+          location: currentLocation
+            ? {
+                ...currentLocation,
+                accuracy:
+                  gpsAccuracy || 0
+              }
+            : undefined,
+          origemStart: 'manual'
         });
-
-        if (ordem.status === 'pendente') {
-          await updateDoc(doc(db, 'ordens_servico', ordem.id), { status: 'em_execucao' });
-        }
 
         enviarNotificacao({
           farmId,
@@ -226,15 +232,23 @@ export function OperadorDashboard({ farmId, usuario }: OperadorDashboardProps) {
 
         setChecklistOrdem(null);
     } catch (error) {
-        handleFirestoreError(error, OperationType.CREATE, 'execucoes_servico');
+        console.error(
+          'Erro ao iniciar execução:',
+          error
+        );
     }
   };
 
-  const handlePauseExec = async (execId: string) => {
+  const handlePauseExec = async (
+    execution: ExecucaoServico
+  ) => {
     try {
-        await updateDoc(doc(db, 'execucoes_servico', execId), {
-            status: 'pausada',
-            updatedAt: serverTimestamp()
+        await pausarExecucaoOperacional({
+          execucaoId: execution.id,
+          ordemId:
+            execution.ordemId,
+          farmId:
+            execution.farmId
         });
         enviarNotificacao({
           farmId,
@@ -244,31 +258,50 @@ export function OperadorDashboard({ farmId, usuario }: OperadorDashboardProps) {
           severidade: 'warning'
         });
     } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, `execucoes_servico/${execId}`);
+        console.error(
+          'Erro ao pausar execução:',
+          error
+        );
     }
   };
 
-  const handleResumeExec = async (execId: string) => {
+  const handleResumeExec = async (
+    execution: ExecucaoServico
+  ) => {
     try {
-        await updateDoc(doc(db, 'execucoes_servico', execId), {
-            status: 'em_execucao',
-            updatedAt: serverTimestamp()
+        await retomarExecucaoOperacional({
+          execucaoId: execution.id,
+          ordemId:
+            execution.ordemId,
+          farmId:
+            execution.farmId
         });
     } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, `execucoes_servico/${execId}`);
+        console.error(
+          'Erro ao retomar execução:',
+          error
+        );
     }
   };
 
-  const handleFinishExec = async (execId: string, ordemId: string) => {
+  const handleFinishExec = async (
+    execution: ExecucaoServico
+  ) => {
     try {
-        await updateDoc(doc(db, 'execucoes_servico', execId), {
-            status: 'finalizada',
-            dataFim: serverTimestamp(),
-            locationEnd: currentLocation ? { ...currentLocation, accuracy: gpsAccuracy || 0 } : null,
-            updatedAt: serverTimestamp()
+        await finalizarExecucaoOperacional({
+          execucaoId: execution.id,
+          ordemId:
+            execution.ordemId,
+          farmId:
+            execution.farmId,
+          location: currentLocation
+            ? {
+                ...currentLocation,
+                accuracy:
+                  gpsAccuracy || 0
+              }
+            : undefined
         });
-
-        await updateDoc(doc(db, 'ordens_servico', ordemId), { status: 'parcial' });
 
         enviarNotificacao({
           farmId,
@@ -278,7 +311,10 @@ export function OperadorDashboard({ farmId, usuario }: OperadorDashboardProps) {
           severidade: 'info'
         });
     } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, `execucoes_servico/${execId}`);
+        console.error(
+          'Erro ao finalizar execução:',
+          error
+        );
     }
   };
 
@@ -468,21 +504,21 @@ export function OperadorDashboard({ farmId, usuario }: OperadorDashboardProps) {
                      <div className="grid grid-cols-2 gap-3">
                         {activeExec.status === 'em_execucao' ? (
                           <button 
-                            onClick={() => handlePauseExec(activeExec.id)}
+                            onClick={() => handlePauseExec(activeExec)}
                             className="w-full flex items-center justify-center gap-2 py-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl font-bold transition-all active:scale-95"
                           >
                              <Pause className="w-5 h-5" /> Pausar
                           </button>
                         ) : (
                           <button 
-                            onClick={() => handleResumeExec(activeExec.id)}
+                            onClick={() => handleResumeExec(activeExec)}
                             className="w-full flex items-center justify-center gap-2 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold transition-all active:scale-95"
                           >
                              <Play className="w-5 h-5" /> Retomar
                           </button>
                         )}
                         <button 
-                          onClick={() => handleFinishExec(activeExec.id, activeExec.ordemId)}
+                          onClick={() => handleFinishExec(activeExec)}
                           className="w-full flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-bold transition-all active:scale-95"
                         >
                            <StopCircle className="w-5 h-5" /> Finalizar

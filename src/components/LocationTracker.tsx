@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import { doc, updateDoc, arrayUnion, collection, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { syncService } from '../services/syncService';
+import {
+  appendLocalPathPoints,
+  getCachedOrdemServico
+} from '../services/offlineOperationalStore';
 import { enviarNotificacao } from '../hooks/useNotificacoes';
 import { ExecucaoServico, SegmentoExecucao } from '../types';
 import { validarPontoGPS, calcularDistancia, calcularVelocidade } from '../utils/geoUtils';
@@ -35,10 +39,25 @@ export function LocationTracker({ activeExecutions }: LocationTrackerProps) {
   // Memoize largura operacional from orders
   useEffect(() => {
     activeExecutions.forEach(async (exec) => {
-      // Skip fetching if already in ref or if execId is offline (temporary)
-      if (exec.id.startsWith('offline_')) return;
-      
       if (!larguraOperacionalRef.current[exec.ordemId]) {
+        const cachedOrder =
+          getCachedOrdemServico(
+            exec.farmId,
+            exec.ordemId
+          );
+
+        if (cachedOrder?.larguraOperacional) {
+          larguraOperacionalRef.current[
+            exec.ordemId
+          ] =
+            cachedOrder.larguraOperacional;
+          return;
+        }
+
+        if (!navigator.onLine) {
+          return;
+        }
+
         try {
           const osSnap = await getDoc(doc(db, 'ordens_servico', exec.ordemId));
           if (osSnap.exists()) {
@@ -73,18 +92,39 @@ export function LocationTracker({ activeExecutions }: LocationTrackerProps) {
           const avgSpeed = durationSec > 0 ? (totalDist / durationSec) * 3.6 : 0;
 
           const segmentData = {
+            id: doc(
+              collection(
+                db,
+                'segmentos_execucao'
+              )
+            ).id,
             ...segment,
+            createdAtMs: Date.now(),
             metadata: {
               distanciaPercorrida: totalDist,
               velocidadeMedia: avgSpeed
             }
           };
 
-          if (!navigator.onLine || execId.startsWith('offline_')) {
+          const execution =
+            activeExecutionsRef.current.find(
+              item => item.id === execId
+            );
+
+          if (
+            !navigator.onLine ||
+            execution?.sincronizado === false
+          ) {
             syncService.enqueue('CREATE_SEGMENTO', segmentData);
           } else {
+            const {
+              id: _segmentId,
+              createdAtMs: _createdAtMs,
+              ...firestoreSegmentData
+            } = segmentData;
+
             await addDoc(collection(db, 'segmentos_execucao'), {
-              ...segmentData,
+              ...firestoreSegmentData,
               createdAt: serverTimestamp()
             });
           }
@@ -105,7 +145,19 @@ export function LocationTracker({ activeExecutions }: LocationTrackerProps) {
           pointsBuffer.current[execId] = [];
 
           try {
-            if (!navigator.onLine || execId.startsWith('offline_')) {
+            const execution =
+              activeExecutionsRef.current.find(
+                item => item.id === execId
+              );
+
+            if (
+              !navigator.onLine ||
+              execution?.sincronizado === false
+            ) {
+              appendLocalPathPoints(
+                execId,
+                points
+              );
               syncService.enqueue('ADD_PATH_POINT', { execId, points });
             } else {
               await updateDoc(doc(db, 'execucoes_servico', execId), {

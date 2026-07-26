@@ -12,7 +12,8 @@ import {
   Loader2, 
   AlertCircle 
 } from 'lucide-react';
-import { useOrdensServico, useExecucoesServico, useMinhasExecucoesAtivas } from '../../hooks/useServicos';
+import { useOrdensServico, useMinhasExecucoesAtivas } from '../../hooks/useServicos';
+import { useChecklistTemplates } from '../../hooks/useChecklists';
 import { useConfigOperacaoProdutos } from '../../hooks/useConfigOperacaoProdutos';
 import { useEquipamentos } from '../../hooks/useEquipamentos';
 import { ExecucoesList } from './ExecucoesList';
@@ -22,6 +23,10 @@ import { OrdemCard } from './OrdemCard';
 import { OrdemMachineModal } from '../combustivel/OrdemMachineModal';
 import { addDoc, arrayUnion, collection, serverTimestamp, updateDoc, doc, query, where, getDocs, writeBatch, increment } from 'firebase/firestore';
 import { db, auth } from '../../services/firebase';
+import {
+  finalizarExecucaoOperacional,
+  iniciarExecucaoOperacional
+} from '../../services/operacaoOfflineService';
 import { handleFirestoreError, OperationType } from '../../utils/errorHandling';
 import {
   persistirRastreabilidadeExecucaoUEI,
@@ -50,6 +55,7 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
   } = useOrdensServico(farmId);
   
   const { execucoesAtivas } = useMinhasExecucoesAtivas(farmId);
+  useChecklistTemplates(farmId);
   const { configs } = useConfigOperacaoProdutos(farmId);
   const { equipamentos } = useEquipamentos(farmId);
   
@@ -84,7 +90,7 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
     ordem: OrdemServico;
     execucaoId: string;
     location: any;
-    rastreabilidade: RastreabilidadeExecucaoUEI;
+    rastreabilidade?: RastreabilidadeExecucaoUEI;
   } | null>(null);
 
   const canManage = userRole === 'admin' || userRole === 'gerente';
@@ -165,48 +171,19 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
         location = { lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy };
       } catch (e) { console.warn('GPS failed', e); }
 
-      const newExecRef = await addDoc(collection(db, 'execucoes_servico'), {
-        ordemId: ordem.id,
+      await iniciarExecucaoOperacional({
+        ordem,
         farmId,
-        talhaoId: ordem.talhaoId,
-        operadorId: auth.currentUser?.uid,
-        status: 'em_execucao',
-        dataInicio: serverTimestamp(),
+        operadorId:
+          auth.currentUser?.uid ||
+          usuarioId,
+        operadorNome:
+          auth.currentUser?.displayName ||
+          'Operador',
+        location,
         origemStart: 'manual',
-        locationStart: location || null,
-        createdAt: serverTimestamp(),
-        maquinaId: ordem.maquinaId || null,
-        maquinaNome: ordem.maquinaNome || null,
-        implementoId: ordem.implementoId || null,
-        implementoNome: ordem.implementoNome || null,
-        produtos: ordem.produtos || [],
-        ...(horimetroInicial !== undefined ? { horimetroInicial } : {})
+        horimetroInicial
       });
-
-      if (horimetroInicial !== undefined && ordem.maquinaId) {
-        await addDoc(collection(db, 'horimetros'), {
-          farmId,
-          producerId: auth.currentUser?.uid || '',
-          maquinaId: ordem.maquinaId,
-          maquinaNome: ordem.maquinaNome || '',
-          horimetroAnterior: horimetroInicial, // Best effort
-          horimetroAtual: horimetroInicial,
-          dataRegistro: serverTimestamp(),
-          operadorId: auth.currentUser?.uid || '',
-          operadorNome: 'Operador',
-          observacao: `Abertura da Ordem #${ordem.id.slice(-6)}`,
-          createdAt: serverTimestamp()
-        });
-        
-        await updateDoc(doc(db, 'equipamentos', ordem.maquinaId), {
-          horimetroAtual: horimetroInicial,
-          ultimaAtualizacaoHorimetro: serverTimestamp()
-        });
-      }
-
-      if (ordem.status === 'pendente') {
-        await updateDoc(doc(db, 'ordens_servico', ordem.id), { status: 'em_execucao' });
-      }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'execucoes_servico');
     }
@@ -416,6 +393,25 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
         });
         location = { lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy };
       } catch (e) { console.warn('GPS failed', e); }
+
+      if (!navigator.onLine) {
+        if (ordem.maquinaId) {
+          setMachineModalFinish({
+            ordem,
+            execucaoId,
+            location
+          });
+          return;
+        }
+
+        await finalizarExecucaoOperacional({
+          execucaoId,
+          ordemId: ordem.id,
+          farmId,
+          location
+        });
+        return;
+      }
 
       const talhao = talhoes.find(t => t.id === ordem.talhaoId);
       const rastreabilidade =
@@ -943,6 +939,24 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
           onConfirm={(h) => {
             const data = machineModalFinish;
             setMachineModalFinish(null);
+
+            if (
+              !navigator.onLine ||
+              !data.rastreabilidade
+            ) {
+              void finalizarExecucaoOperacional({
+                execucaoId:
+                  data.execucaoId,
+                ordemId:
+                  data.ordem.id,
+                farmId,
+                location:
+                  data.location,
+                horimetroFinal: h
+              });
+              return;
+            }
+
             void executeAtomicFinalization(
               data.execucaoId,
               data.ordem,

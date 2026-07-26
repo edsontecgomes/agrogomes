@@ -1,17 +1,54 @@
 import {
   collection,
-  addDoc,
   updateDoc,
   doc,
   arrayUnion,
   serverTimestamp,
+  setDoc,
   writeBatch,
 } from 'firebase/firestore';
 
 import { db } from './firebase';
 import { OfflineEvent } from '../types';
+import {
+  removeLocalChecklistResponse,
+  removeLocalExecucao,
+  updateCachedOrdemServico,
+} from './offlineOperationalStore';
 
 const QUEUE_KEY = 'agri_offline_queue';
+
+function withoutUndefined(
+  value: unknown,
+): unknown {
+  if (Array.isArray(value)) {
+    return value.map(withoutUndefined);
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    !(value instanceof Date)
+  ) {
+    return Object.fromEntries(
+      Object.entries(
+        value as Record<string, unknown>,
+      )
+        .filter(
+          ([, currentValue]) =>
+            currentValue !== undefined,
+        )
+        .map(([key, currentValue]) => [
+          key,
+          withoutUndefined(
+            currentValue,
+          ),
+        ]),
+    );
+  }
+
+  return value;
+}
 
 class SyncService {
   private queue: OfflineEvent[] = [];
@@ -91,6 +128,8 @@ class SyncService {
     if (navigator.onLine) {
       void this.processQueue();
     }
+
+    return event.id;
   }
 
   public async processQueue() {
@@ -117,6 +156,9 @@ class SyncService {
           );
 
           this.saveQueue();
+          this.reconcileLocalState(
+            event,
+          );
         } catch (error) {
           console.error(
             `Failed to sync event ${event.id} (${event.type})`,
@@ -126,17 +168,10 @@ class SyncService {
           event.retries =
             (event.retries || 0) + 1;
 
-          if (event.retries > 10) {
-            this.queue =
-              this.queue.filter(
-                (queuedEvent) =>
-                  queuedEvent.id !== event.id,
-              );
-
-            this.saveQueue();
-          } else {
-            this.saveQueue();
-          }
+          // O registro permanece na fila. Dados de campo não
+          // podem ser descartados após um número arbitrário
+          // de tentativas.
+          this.saveQueue();
 
           break;
         }
@@ -159,15 +194,47 @@ class SyncService {
 
     switch (type) {
       case 'CREATE_EXECUCAO': {
-        await addDoc(
-          collection(
+        const {
+          id,
+          dataInicioMs,
+          dataFimMs,
+          createdAtMs,
+          ...data
+        } = payload;
+
+        if (!id) {
+          throw new Error(
+            'ID definitivo ausente na execução offline.',
+          );
+        }
+
+        await setDoc(
+          doc(
             db,
             'execucoes_servico',
+            id,
           ),
           {
-            ...payload,
-            createdAt: serverTimestamp(),
-            dataInicio: serverTimestamp(),
+            ...(withoutUndefined(
+              data,
+            ) as Record<string, unknown>),
+            dataInicio: new Date(
+              dataInicioMs ||
+                event.createdAt,
+            ),
+            ...(dataFimMs
+              ? {
+                  dataFim:
+                    new Date(dataFimMs),
+                }
+              : {}),
+            createdAt: new Date(
+              createdAtMs ||
+                event.createdAt,
+            ),
+            syncedAt:
+              serverTimestamp(),
+            sincronizado: true,
           },
         );
 
@@ -175,7 +242,13 @@ class SyncService {
       }
 
       case 'UPDATE_EXECUCAO': {
-        const { id, ...data } = payload;
+        const {
+          id,
+          dataFimMs,
+          updatedAtMs: _updatedAtMs,
+          dataFim: _dataFim,
+          ...data
+        } = payload;
 
         await updateDoc(
           doc(
@@ -184,8 +257,18 @@ class SyncService {
             id,
           ),
           {
-            ...data,
+            ...(withoutUndefined(
+              data,
+            ) as Record<string, unknown>),
+            ...(dataFimMs
+              ? {
+                  dataFim:
+                    new Date(dataFimMs),
+                }
+              : {}),
             updatedAt: serverTimestamp(),
+            syncedAt: serverTimestamp(),
+            sincronizado: true,
           },
         );
 
@@ -210,16 +293,116 @@ class SyncService {
       }
 
       case 'CREATE_SEGMENTO': {
-        await addDoc(
-          collection(
+        const {
+          id,
+          createdAtMs,
+          ...segmentData
+        } = payload;
+        const segmentId =
+          id ||
+          doc(
+            collection(
+              db,
+              'segmentos_execucao',
+            ),
+          ).id;
+
+        await setDoc(
+          doc(
             db,
             'segmentos_execucao',
+            segmentId,
           ),
           {
-            ...payload,
-            createdAt: serverTimestamp(),
+            ...(withoutUndefined(
+              segmentData,
+            ) as Record<string, unknown>),
+            createdAt: new Date(
+              createdAtMs ||
+                event.createdAt,
+            ),
+            syncedAt:
+              serverTimestamp(),
           },
         );
+
+        break;
+      }
+
+      case 'UPDATE_ORDEM_SERVICO': {
+        const {
+          id,
+          farmId: _farmId,
+          updatedAtMs: _updatedAtMs,
+          ...data
+        } = payload;
+
+        await updateDoc(
+          doc(
+            db,
+            'ordens_servico',
+            id,
+          ),
+          {
+            ...(withoutUndefined(
+              data,
+            ) as Record<string, unknown>),
+            updatedAt: serverTimestamp(),
+          },
+        );
+
+        break;
+      }
+
+      case 'CREATE_HORIMETRO': {
+        const {
+          id,
+          dataRegistroMs,
+          ...horimeterData
+        } = payload;
+
+        await setDoc(
+          doc(
+            db,
+            'horimetros',
+            id,
+          ),
+          {
+            ...(withoutUndefined(
+              horimeterData,
+            ) as Record<string, unknown>),
+            dataRegistro: new Date(
+              dataRegistroMs ||
+                event.createdAt,
+            ),
+            createdAt: new Date(
+              event.createdAt,
+            ),
+            syncedAt:
+              serverTimestamp(),
+          },
+        );
+
+        if (
+          payload.maquinaId &&
+          Number.isFinite(
+            payload.horimetroAtual,
+          )
+        ) {
+          await updateDoc(
+            doc(
+              db,
+              'equipamentos',
+              payload.maquinaId,
+            ),
+            {
+              horimetroAtual:
+                payload.horimetroAtual,
+              ultimaAtualizacaoHorimetro:
+                serverTimestamp(),
+            },
+          );
+        }
 
         break;
       }
@@ -263,7 +446,9 @@ class SyncService {
           );
 
         const coreData = {
-          ...payload,
+          ...(withoutUndefined(
+            payload,
+          ) as Record<string, unknown>),
           timestamp: dataRegistro,
           createdAt: serverTimestamp(),
           syncedAt: serverTimestamp(),
@@ -291,19 +476,118 @@ class SyncService {
       }
 
       case 'SUBMIT_CHECKLIST': {
-        await addDoc(
-          collection(
+        const {
+          id,
+          createdAtMs,
+          ...responseData
+        } = payload;
+        const responseId =
+          id ||
+          doc(
+            collection(
+              db,
+              'checklist_respostas',
+            ),
+          ).id;
+
+        await setDoc(
+          doc(
             db,
             'checklist_respostas',
+            responseId,
           ),
           {
-            ...payload,
-            createdAt: serverTimestamp(),
+            ...(withoutUndefined(
+              responseData,
+            ) as Record<string, unknown>),
+            createdAt: new Date(
+              createdAtMs ||
+                event.createdAt,
+            ),
+            syncedAt:
+              serverTimestamp(),
           },
         );
 
         break;
       }
+    }
+  }
+
+  private reconcileLocalState(
+    event: OfflineEvent,
+  ) {
+    const payload = event.payload as Record<
+      string,
+      any
+    >;
+
+    if (
+      event.type ===
+        'UPDATE_ORDEM_SERVICO' &&
+      payload.farmId &&
+      payload.id &&
+      payload.status
+    ) {
+      updateCachedOrdemServico(
+        payload.farmId,
+        payload.id,
+        { status: payload.status },
+      );
+    }
+
+    if (
+      event.type ===
+        'SUBMIT_CHECKLIST' &&
+      payload.id
+    ) {
+      removeLocalChecklistResponse(
+        payload.id,
+      );
+    }
+
+    const executionId =
+      event.type ===
+      'ADD_PATH_POINT'
+        ? payload.execId
+        : event.type ===
+              'CREATE_EXECUCAO' ||
+            event.type ===
+              'UPDATE_EXECUCAO'
+          ? payload.id
+          : event.type ===
+              'CREATE_SEGMENTO'
+            ? payload.execucaoId
+            : null;
+
+    if (!executionId) {
+      return;
+    }
+
+    const hasPendingExecutionEvents =
+      this.queue.some(
+        (queuedEvent) => {
+          const queuedPayload =
+            queuedEvent.payload as Record<
+              string,
+              any
+            >;
+
+          return (
+            queuedPayload.id ===
+              executionId ||
+            queuedPayload.execId ===
+              executionId ||
+            queuedPayload.execucaoId ===
+              executionId
+          );
+        },
+      );
+
+    if (!hasPendingExecutionEvents) {
+      removeLocalExecucao(
+        executionId,
+      );
     }
   }
 

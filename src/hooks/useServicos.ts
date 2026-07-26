@@ -9,11 +9,27 @@ import {
   updateDoc,
   doc,
   serverTimestamp,
-  getDocs,
   getDoc,
   arrayUnion
 } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
+import {
+  appendLocalPathPoints,
+  cacheExecucoesServico,
+  cacheOrdensServico,
+  findCachedOrdemServico,
+  getCachedOrdemServico,
+  getCachedOrdensServico,
+  getLocalExecucoes,
+  mergeById,
+  OFFLINE_OPERATIONAL_STORE_EVENT,
+  updateCachedOrdemServico
+} from '../services/offlineOperationalStore';
+import {
+  finalizarExecucaoOperacional,
+  iniciarExecucaoOperacional,
+  pausarExecucaoOperacional
+} from '../services/operacaoOfflineService';
 import { syncService } from '../services/syncService';
 import { OrdemServico, ExecucaoServico } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandling';
@@ -28,6 +44,19 @@ export function useOrdensServico(farmId: string | null) {
       setLoading(false);
       return;
     }
+
+    const readCachedOrders = () => {
+      setOrdens(
+        getCachedOrdensServico(farmId)
+      );
+    };
+
+    readCachedOrders();
+
+    window.addEventListener(
+      OFFLINE_OPERATIONAL_STORE_EVENT,
+      readCachedOrders
+    );
 
     const q = query(
       collection(db, 'ordens_servico'),
@@ -51,6 +80,10 @@ export function useOrdensServico(farmId: string | null) {
         });
 
         setOrdens(ordensData);
+        cacheOrdensServico(
+          farmId,
+          ordensData
+        );
         setLoading(false);
       },
       error => {
@@ -59,11 +92,18 @@ export function useOrdensServico(farmId: string | null) {
           OperationType.LIST,
           'ordens_servico'
         );
+        readCachedOrders();
         setLoading(false);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_OPERATIONAL_STORE_EVENT,
+        readCachedOrders
+      );
+    };
   }, [farmId]);
 
   const criarOrdem = async (
@@ -105,12 +145,43 @@ export function useOrdensServico(farmId: string | null) {
     ordemId: string,
     status: OrdemServico['status']
   ) => {
+    if (!farmId) return;
+
+    updateCachedOrdemServico(
+      farmId,
+      ordemId,
+      { status }
+    );
+
+    if (!navigator.onLine) {
+      syncService.enqueue(
+        'UPDATE_ORDEM_SERVICO',
+        {
+          id: ordemId,
+          farmId,
+          status,
+          updatedAtMs: Date.now()
+        }
+      );
+      return;
+    }
+
     try {
       await updateDoc(doc(db, 'ordens_servico', ordemId), {
         status,
         updatedAt: serverTimestamp()
       });
     } catch (error) {
+      syncService.enqueue(
+        'UPDATE_ORDEM_SERVICO',
+        {
+          id: ordemId,
+          farmId,
+          status,
+          updatedAtMs: Date.now()
+        }
+      );
+
       handleFirestoreError(
         error,
         OperationType.UPDATE,
@@ -148,21 +219,50 @@ export function useOrdemServico(ordemId: string | null) {
       return;
     }
 
+    const readCachedOrder = () => {
+      setOrdem(
+        findCachedOrdemServico(
+          ordemId
+        )
+      );
+    };
+
+    readCachedOrder();
+
+    window.addEventListener(
+      OFFLINE_OPERATIONAL_STORE_EVENT,
+      readCachedOrder
+    );
+
     const unsubscribe = onSnapshot(
       doc(db, 'ordens_servico', ordemId),
       docSnap => {
         if (docSnap.exists()) {
           const data = docSnap.data();
 
-          setOrdem({
+          const remoteOrder = {
             id: docSnap.id,
             ...data,
             createdAt: data.createdAt?.toDate() || new Date(),
             janelaInicio: data.janelaInicio?.toDate(),
             janelaFim: data.janelaFim?.toDate()
-          } as OrdemServico);
+          } as OrdemServico;
+
+          setOrdem(remoteOrder);
+
+          if (remoteOrder.farmId) {
+            cacheOrdensServico(
+              remoteOrder.farmId,
+              mergeById(
+                getCachedOrdensServico(
+                  remoteOrder.farmId
+                ),
+                [remoteOrder]
+              )
+            );
+          }
         } else {
-          setOrdem(null);
+          readCachedOrder();
         }
 
         setLoading(false);
@@ -173,11 +273,18 @@ export function useOrdemServico(ordemId: string | null) {
           OperationType.GET,
           `ordens_servico/${ordemId}`
         );
+        readCachedOrder();
         setLoading(false);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_OPERATIONAL_STORE_EVENT,
+        readCachedOrder
+      );
+    };
   }, [ordemId]);
 
   return { ordem, loading };
@@ -196,6 +303,32 @@ export function useExecucoesServico(
       setLoading(false);
       return;
     }
+
+    let remoteExecutions:
+      ExecucaoServico[] = [];
+
+    const refreshExecutions = () => {
+      setExecucoes(
+        mergeById(
+          remoteExecutions,
+          getLocalExecucoes({
+            farmId,
+            ordemId
+          })
+        ).sort(
+          (a, b) =>
+            b.createdAt.getTime() -
+            a.createdAt.getTime()
+        )
+      );
+    };
+
+    refreshExecutions();
+
+    window.addEventListener(
+      OFFLINE_OPERATIONAL_STORE_EVENT,
+      refreshExecutions
+    );
 
     const q = query(
       collection(db, 'execucoes_servico'),
@@ -219,7 +352,12 @@ export function useExecucoesServico(
           } as ExecucaoServico;
         });
 
-        setExecucoes(execucoesData);
+        remoteExecutions =
+          execucoesData;
+        cacheExecucoesServico(
+          execucoesData
+        );
+        refreshExecutions();
         setLoading(false);
       },
       error => {
@@ -228,60 +366,19 @@ export function useExecucoesServico(
           OperationType.LIST,
           'execucoes_servico'
         );
+        refreshExecutions();
         setLoading(false);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_OPERATIONAL_STORE_EVENT,
+        refreshExecutions
+      );
+    };
   }, [ordemId, farmId]);
-
-  const updateOSStatusFromExecutions = async (
-    ordemIdAtual: string
-  ) => {
-    if (!farmId) return;
-
-    const q = query(
-      collection(db, 'execucoes_servico'),
-      where('farmId', '==', farmId),
-      where('ordemId', '==', ordemIdAtual)
-    );
-
-    const snapshot = await getDocs(q);
-    const execucoesDaOrdem = snapshot.docs.map(
-      documento => documento.data() as ExecucaoServico
-    );
-
-    const osRef = doc(db, 'ordens_servico', ordemIdAtual);
-    const osSnap = await getDoc(osRef);
-
-    if (!osSnap.exists()) return;
-
-    const osData = osSnap.data() as OrdemServico;
-
-    if (osData.status === 'finalizada') return;
-
-    const possuiExecucaoAtiva = execucoesDaOrdem.some(
-      execucao => execucao.status === 'em_execucao'
-    );
-
-    const possuiExecucaoFinalizada = execucoesDaOrdem.some(
-      execucao => execucao.status === 'finalizada'
-    );
-
-    let proximoStatus: OrdemServico['status'] = 'pendente';
-
-    if (possuiExecucaoAtiva) {
-      proximoStatus = 'em_execucao';
-    } else if (possuiExecucaoFinalizada) {
-      proximoStatus = 'parcial';
-    }
-
-    if (osData.status !== proximoStatus) {
-      await updateDoc(osRef, {
-        status: proximoStatus
-      });
-    }
-  };
 
   const iniciarExecucao = async (
     farmIdExecucao: string,
@@ -296,91 +393,79 @@ export function useExecucoesServico(
       | 'automatic_geofence' =
       'manual'
   ) => {
-    if (!ordemId || !auth.currentUser) return;
+    if (
+      !ordemId ||
+      !auth.currentUser
+    ) {
+      return;
+    }
 
     try {
-      let operadorNome = 'Operador';
-
-      try {
-        const userDoc = await getDoc(
-          doc(db, 'usuarios', auth.currentUser.uid)
+      let order =
+        getCachedOrdemServico(
+          farmIdExecucao,
+          ordemId
         );
 
-        const userData = userDoc.data();
+      if (!order) {
+        try {
+          const orderSnap = await getDoc(
+            doc(
+              db,
+              'ordens_servico',
+              ordemId
+            )
+          );
 
-        operadorNome =
-          userData?.nome ||
-          auth.currentUser.displayName ||
-          'Operador';
-      } catch {
-        console.warn('Using default operator name (offline).');
-      }
+          if (orderSnap.exists()) {
+            const data =
+              orderSnap.data();
 
-      let maquinaId = null;
-      let maquinaNome = null;
-      let implementoId = null;
-      let implementoNome = null;
-      let produtos: OrdemServico['produtos'] = [];
-
-      try {
-        const orderSnap = await getDoc(
-          doc(db, 'ordens_servico', ordemId)
-        );
-
-        if (orderSnap.exists()) {
-          const orderData = orderSnap.data();
-
-          maquinaId = orderData.maquinaId || null;
-          maquinaNome = orderData.maquinaNome || null;
-          implementoId = orderData.implementoId || null;
-          implementoNome = orderData.implementoNome || null;
-          produtos = orderData.produtos || [];
+            order = {
+              id: orderSnap.id,
+              ...data,
+              createdAt:
+                data.createdAt?.toDate() ||
+                new Date(),
+              janelaInicio:
+                data.janelaInicio?.toDate(),
+              janelaFim:
+                data.janelaFim?.toDate()
+            } as OrdemServico;
+          }
+        } catch {
+          console.warn(
+            'Ordem não disponível na rede; usando os dados operacionais locais.'
+          );
         }
-      } catch {
-        console.warn(
-          'Could not retrieve order details for equipment mapping.'
-        );
       }
 
-      const payload = {
-        ordemId,
+      const executableOrder =
+        order || {
+          id: ordemId,
+          farmId: farmIdExecucao,
+          titulo: 'Operação offline',
+          tipoOperacao:
+            'Outros' as const,
+          talhaoId,
+          status:
+            'pendente' as const,
+          createdBy:
+            auth.currentUser.uid,
+          createdAt: new Date()
+        };
+
+      return await iniciarExecucaoOperacional({
+        ordem: executableOrder,
         farmId: farmIdExecucao,
-        talhaoId,
-        operadorId: auth.currentUser.uid,
-        operadorNome,
-        status: 'em_execucao',
-        origemStart,
-        locationStart: location || null,
-        path: [],
-        maquinaId,
-        maquinaNome,
-        implementoId,
-        implementoNome,
-        produtos
-      };
-
-      if (!navigator.onLine) {
-        const tempId =
-          'offline_' +
-          Math.random().toString(36).substring(2, 11);
-
-        syncService.enqueue('CREATE_EXECUCAO', payload);
-
-        return tempId;
-      }
-
-      const docRef = await addDoc(
-        collection(db, 'execucoes_servico'),
-        {
-          ...payload,
-          dataInicio: serverTimestamp(),
-          createdAt: serverTimestamp()
-        }
-      );
-
-      await updateOSStatusFromExecutions(ordemId);
-
-      return docRef.id;
+        operadorId:
+          auth.currentUser.uid,
+        operadorNome:
+          auth.currentUser.displayName ||
+          'Operador',
+        location,
+        origemStart
+      });
     } catch (error) {
       handleFirestoreError(
         error,
@@ -391,24 +476,14 @@ export function useExecucoesServico(
   };
 
   const pausarExecucao = async (execucaoId: string) => {
+    if (!ordemId || !farmId) return;
+
     try {
-      if (!navigator.onLine) {
-        syncService.enqueue('UPDATE_EXECUCAO', {
-          id: execucaoId,
-          status: 'pausada'
-        });
-        return;
-      }
-
-      await updateDoc(
-        doc(db, 'execucoes_servico', execucaoId),
-        {
-          status: 'pausada',
-          updatedAt: serverTimestamp()
-        }
-      );
-
-      await updateOSStatusFromExecutions(ordemId!);
+      await pausarExecucaoOperacional({
+        execucaoId,
+        ordemId,
+        farmId
+      });
     } catch (error) {
       handleFirestoreError(
         error,
@@ -426,28 +501,15 @@ export function useExecucoesServico(
       accuracy?: number;
     }
   ) => {
+    if (!ordemId || !farmId) return;
+
     try {
-      if (!navigator.onLine) {
-        syncService.enqueue('UPDATE_EXECUCAO', {
-          id: execucaoId,
-          status: 'finalizada',
-          dataFim: Date.now(),
-          locationEnd: location || null
-        });
-        return;
-      }
-
-      await updateDoc(
-        doc(db, 'execucoes_servico', execucaoId),
-        {
-          status: 'finalizada',
-          dataFim: serverTimestamp(),
-          locationEnd: location || null,
-          updatedAt: serverTimestamp()
-        }
-      );
-
-      await updateOSStatusFromExecutions(ordemId!);
+      await finalizarExecucaoOperacional({
+        execucaoId,
+        ordemId,
+        farmId,
+        location
+      });
     } catch (error) {
       handleFirestoreError(
         error,
@@ -468,6 +530,10 @@ export function useExecucoesServico(
   ) => {
     try {
       if (!navigator.onLine) {
+        appendLocalPathPoints(
+          execucaoId,
+          [ponto]
+        );
         syncService.enqueue('ADD_PATH_POINT', {
           execId: execucaoId,
           points: [ponto]
@@ -516,10 +582,39 @@ export function useMinhasExecucoesAtivas(
       return;
     }
 
+    const operatorId =
+      auth.currentUser.uid;
+    let remoteExecutions:
+      ExecucaoServico[] = [];
+
+    const refreshActiveExecutions =
+      () => {
+        setExecucoesAtivas(
+          mergeById(
+            remoteExecutions,
+            getLocalExecucoes({
+              farmId,
+              operadorId: operatorId,
+              statuses: [
+                'em_execucao',
+                'pausada'
+              ]
+            })
+          )
+        );
+      };
+
+    refreshActiveExecutions();
+
+    window.addEventListener(
+      OFFLINE_OPERATIONAL_STORE_EVENT,
+      refreshActiveExecutions
+    );
+
     const q = query(
       collection(db, 'execucoes_servico'),
       where('farmId', '==', farmId),
-      where('operadorId', '==', auth.currentUser.uid),
+      where('operadorId', '==', operatorId),
       where('status', 'in', ['em_execucao', 'pausada'])
     );
 
@@ -537,7 +632,12 @@ export function useMinhasExecucoesAtivas(
           } as ExecucaoServico;
         });
 
-        setExecucoesAtivas(execucoesData);
+        remoteExecutions =
+          execucoesData;
+        cacheExecucoesServico(
+          execucoesData
+        );
+        refreshActiveExecutions();
         setLoading(false);
       },
       error => {
@@ -546,11 +646,18 @@ export function useMinhasExecucoesAtivas(
           OperationType.LIST,
           'execucoes_servico'
         );
+        refreshActiveExecutions();
         setLoading(false);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_OPERATIONAL_STORE_EVENT,
+        refreshActiveExecutions
+      );
+    };
   }, [farmId]);
 
   return { execucoesAtivas, loading };
@@ -571,6 +678,31 @@ export function useTodasExecucoesServico(
       setLoading(false);
       return;
     }
+
+    let remoteExecutions:
+      ExecucaoServico[] = [];
+
+    const refreshAllExecutions = () => {
+      setExecucoes(
+        mergeById(
+          remoteExecutions,
+          getLocalExecucoes({
+            farmId
+          })
+        ).sort(
+          (a, b) =>
+            b.createdAt.getTime() -
+            a.createdAt.getTime()
+        )
+      );
+    };
+
+    refreshAllExecutions();
+
+    window.addEventListener(
+      OFFLINE_OPERATIONAL_STORE_EVENT,
+      refreshAllExecutions
+    );
 
     const q = query(
       collection(db, 'execucoes_servico'),
@@ -593,7 +725,12 @@ export function useTodasExecucoesServico(
           } as ExecucaoServico;
         });
 
-        setExecucoes(execucoesData);
+        remoteExecutions =
+          execucoesData;
+        cacheExecucoesServico(
+          execucoesData
+        );
+        refreshAllExecutions();
         setLoading(false);
       },
       error => {
@@ -602,11 +739,18 @@ export function useTodasExecucoesServico(
           OperationType.LIST,
           'execucoes_servico'
         );
+        refreshAllExecutions();
         setLoading(false);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_OPERATIONAL_STORE_EVENT,
+        refreshAllExecutions
+      );
+    };
   }, [farmId]);
 
   return { execucoes, loading };
