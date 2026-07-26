@@ -127,7 +127,29 @@ export interface ConfigOperacaoProduto {
 export interface PathPoint {
   lat: number;
   lng: number;
+  accuracy?: number;
   timestamp: number;
+}
+
+export interface MaterialAplicadoUEI {
+  produtoId: string;
+  nome: string;
+  categoria?: string;
+  lote?: string;
+  dose: number;
+  unidade?: string;
+  quantidadeEstimada: number;
+}
+
+export interface CoberturaExecucaoUEI {
+  ueiId: string;
+  codigo?: string;
+  nome?: string;
+  zonaTalhao?: string;
+  areaTotalUEIHa: number;
+  areaTrabalhadaHa: number;
+  percentualCobertura: number;
+  materiais: MaterialAplicadoUEI[];
 }
 
 export interface ExecucaoServico {
@@ -162,6 +184,18 @@ export interface ExecucaoServico {
   maquinaNome?: string;
   implementoId?: string;
   implementoNome?: string;
+  ueiIds?: string[];
+  coberturaUEIs?: CoberturaExecucaoUEI[];
+  areaExecutadaHa?: number;
+  confiabilidadeEspacial?: number;
+  metodoEspacial?: string;
+  observacoesRastreabilidade?: string[];
+  rastreabilidadeStatus?:
+    | "processando"
+    | "concluida"
+    | "sem_cobertura"
+    | "erro";
+  consumoEstoqueStatus?: "baixado" | "pendente_cobertura";
   sincronizado?: boolean;
   createdAt: Date;
 }

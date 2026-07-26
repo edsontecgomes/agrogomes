@@ -20,9 +20,14 @@ import { TalhaoWalkingDrawer } from '../talhoes/TalhaoWalkingDrawer';
 import { ChecklistRunner } from './ChecklistRunner';
 import { OrdemCard } from './OrdemCard';
 import { OrdemMachineModal } from '../combustivel/OrdemMachineModal';
-import { addDoc, collection, serverTimestamp, updateDoc, doc, query, where, getDocs, writeBatch, increment } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, serverTimestamp, updateDoc, doc, query, where, getDocs, writeBatch, increment } from 'firebase/firestore';
 import { db, auth } from '../../services/firebase';
 import { handleFirestoreError, OperationType } from '../../utils/errorHandling';
+import {
+  persistirRastreabilidadeExecucaoUEI,
+  prepararRastreabilidadeExecucaoUEI,
+  type RastreabilidadeExecucaoUEI
+} from '../../services/rastreabilidadeExecucaoUeiService';
 
 interface OrdensListProps {
   ordens: OrdemServico[];
@@ -71,10 +76,16 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
     ordem: OrdemServico;
     products: { nome: string; atual: number; necessario: number; unidade: string }[];
     location: any;
+    rastreabilidade: RastreabilidadeExecucaoUEI;
   } | null>(null);
 
   const [machineModalStart, setMachineModalStart] = useState<OrdemServico | null>(null);
-  const [machineModalFinish, setMachineModalFinish] = useState<{ordem: OrdemServico, execucaoId: string} | null>(null);
+  const [machineModalFinish, setMachineModalFinish] = useState<{
+    ordem: OrdemServico;
+    execucaoId: string;
+    location: any;
+    rastreabilidade: RastreabilidadeExecucaoUEI;
+  } | null>(null);
 
   const canManage = userRole === 'admin' || userRole === 'gerente';
 
@@ -201,8 +212,33 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
     }
   };
 
-  const executeAtomicFinalization = async (execucaoId: string, ordem: OrdemServico, location: any, horimetroFinal?: number) => {
+  const executeAtomicFinalization = async (
+    execucaoId: string,
+    ordem: OrdemServico,
+    location: any,
+    horimetroFinal?: number,
+    rastreabilidadePreparada?: RastreabilidadeExecucaoUEI
+  ) => {
     try {
+      const talhao = talhoes.find(t => t.id === ordem.talhaoId);
+      const rastreabilidade =
+        rastreabilidadePreparada ||
+        await prepararRastreabilidadeExecucaoUEI({
+          execucaoId,
+          ordem,
+          talhao,
+          locationEnd: location
+        });
+      const isAreaBased = [
+        'Plantio',
+        'Pulverizacao',
+        'Adubacao'
+      ].includes(ordem.tipoOperacao);
+      const area = rastreabilidade.areaExecutadaHa;
+      const metodoCalculoArea =
+        rastreabilidade.areaExecutadaHa > 0
+          ? 'cobertura_gps_uei'
+          : 'pendente_cobertura_gps';
       const batch = writeBatch(db);
 
       // 1. Finalize execution
@@ -211,6 +247,32 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
         status: 'finalizada',
         dataFim: serverTimestamp(),
         locationEnd: location || null,
+        ...(location &&
+        (location.accuracy === undefined ||
+          location.accuracy <= 20)
+          ? {
+              path: arrayUnion({
+                ...location,
+                timestamp: Date.now()
+              })
+            }
+          : {}),
+        ueiIds: rastreabilidade.ueiIds,
+        coberturaUEIs: rastreabilidade.coberturas,
+        areaExecutadaHa: rastreabilidade.areaExecutadaHa,
+        confiabilidadeEspacial:
+          rastreabilidade.confiabilidade,
+        metodoEspacial: rastreabilidade.metodo,
+        observacoesRastreabilidade:
+          rastreabilidade.observacoes,
+        rastreabilidadeStatus:
+          rastreabilidade.status === 'concluida'
+            ? 'processando'
+            : 'sem_cobertura',
+        consumoEstoqueStatus:
+          isAreaBased && area <= 0
+            ? 'pendente_cobertura'
+            : 'baixado',
         ...(horimetroFinal !== undefined ? { horimetroFinal } : {})
       });
 
@@ -237,13 +299,13 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
         });
       }
 
-      const isAreaBased = ['Plantio', 'Pulverizacao', 'Adubacao'].includes(ordem.tipoOperacao);
-      const talhao = talhoes.find(t => t.id === ordem.talhaoId);
-      const area = talhao?.area || 0;
-
       // 2. Decrement stock & Create movement for EACH product
       if (ordem.produtos && ordem.produtos.length > 0) {
         for (const p of ordem.produtos) {
+          if (isAreaBased && area <= 0) {
+            continue;
+          }
+
           const qtyConsumida = isAreaBased && area > 0 ? (p.dose || 0) * area : (p.dose || 0);
           const itemEstoque = encontrarItemEstoque(p);
           const origemEstoque =
@@ -281,8 +343,15 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
             origemEstoque,
             ordemId: ordem.id,
             execucaoId,
+            talhaoId: ordem.talhaoId,
+            ueiIds: rastreabilidade.ueiIds,
+            areaBaseCalculoHa: area,
+            metodoCalculoArea,
             farmId,
-            producerId: auth.currentUser?.uid || '',
+            producerId:
+              talhao?.producerId ||
+              auth.currentUser?.uid ||
+              '',
             data: serverTimestamp(),
             createdAt: serverTimestamp()
           });
@@ -291,6 +360,27 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
 
       // Committing atomic batch operations!
       await batch.commit();
+
+      try {
+        await persistirRastreabilidadeExecucaoUEI({
+          rastreabilidade,
+          ordem,
+          talhao
+        });
+      } catch (rastreabilidadeError) {
+        console.error(
+          'A execução foi finalizada, mas a consolidação por UEI falhou:',
+          rastreabilidadeError
+        );
+
+        await updateDoc(execRef, {
+          rastreabilidadeStatus: 'erro',
+          rastreabilidadeErro:
+            rastreabilidadeError instanceof Error
+              ? rastreabilidadeError.message
+              : 'Erro desconhecido ao consolidar as UEIs.'
+        }).catch(() => undefined);
+      }
 
       // Adjust overall Service Order status
       const q = query(
@@ -327,14 +417,26 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
         location = { lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy };
       } catch (e) { console.warn('GPS failed', e); }
 
+      const talhao = talhoes.find(t => t.id === ordem.talhaoId);
+      const rastreabilidade =
+        await prepararRastreabilidadeExecucaoUEI({
+          execucaoId,
+          ordem,
+          talhao,
+          locationEnd: location
+        });
+
       // PRE-CHECK STOCK INSUFFICENCY
       const isAreaBased = ['Plantio', 'Pulverizacao', 'Adubacao'].includes(ordem.tipoOperacao);
-      const talhao = talhoes.find(t => t.id === ordem.talhaoId);
-      const area = talhao?.area || 0;
+      const area = rastreabilidade.areaExecutadaHa;
 
       const insufficientList = [];
       if (ordem.produtos && ordem.produtos.length > 0) {
         for (const p of ordem.produtos) {
+          if (isAreaBased && area <= 0) {
+            continue;
+          }
+
           const qtyRequired = isAreaBased && area > 0 ? (p.dose || 0) * area : (p.dose || 0);
           const stockItem = encontrarItemEstoque(p);
           const currentQty = stockItem ? stockItem.quantidadeAtual : 0;
@@ -354,17 +456,29 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
           execucaoId,
           ordem,
           location,
+          rastreabilidade,
           products: insufficientList
         });
         return;
       }
 
       if (ordem.maquinaId) {
-         setMachineModalFinish({ ordem, execucaoId, location } as any);
+         setMachineModalFinish({
+           ordem,
+           execucaoId,
+           location,
+           rastreabilidade
+         });
          return;
       }
 
-      await executeAtomicFinalization(execucaoId, ordem, location);
+      await executeAtomicFinalization(
+        execucaoId,
+        ordem,
+        location,
+        undefined,
+        rastreabilidade
+      );
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `execucoes_servico/${execucaoId}`);
     }
@@ -774,7 +888,13 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
                     onClick={async () => {
                       const data = insufficientStockData;
                       setInsufficientStockData(null);
-                      await executeAtomicFinalization(data.execucaoId, data.ordem, data.location);
+                      await executeAtomicFinalization(
+                        data.execucaoId,
+                        data.ordem,
+                        data.location,
+                        undefined,
+                        data.rastreabilidade
+                      );
                     }}
                     className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-rose-200/50 transition-all active:scale-95"
                   >
@@ -823,7 +943,13 @@ export function OrdensList({ farmId, userRole, usuarios, talhoes, usuarioId, est
           onConfirm={(h) => {
             const data = machineModalFinish;
             setMachineModalFinish(null);
-            executeAtomicFinalization(data.execucaoId, data.ordem, (data as any).location, h);
+            void executeAtomicFinalization(
+              data.execucaoId,
+              data.ordem,
+              data.location,
+              h,
+              data.rastreabilidade
+            );
           }}
         />
       )}

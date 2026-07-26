@@ -5,6 +5,7 @@ import {
   Navigation,
   PlayCircle,
   Radar,
+  ShieldCheck,
   X
 } from 'lucide-react';
 
@@ -16,6 +17,7 @@ import {
   useExecucoesServico,
   useMinhasExecucoesAtivas
 } from '../hooks/useServicos';
+import { useExecutionWakeLock } from '../hooks/useExecutionWakeLock';
 
 type VisualGeofence = {
   label: string;
@@ -151,6 +153,7 @@ export function GeofenceSuggester({
   };
 
   const isTrackingActive = execucoesAtivas.length > 0;
+  const wakeLock = useExecutionWakeLock(isTrackingActive);
 
   const visualGeofence = obterVisualGeofence(
     geofenceStatus
@@ -254,26 +257,61 @@ export function GeofenceSuggester({
 
       <div className="fixed bottom-24 right-6 z-40 flex flex-col items-end gap-2 pointer-events-none">
         {isTrackingActive && (
-          <motion.div
-            initial={{
-              opacity: 0,
-              x: 20
-            }}
-            animate={{
-              opacity: 1,
-              x: 0
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-full shadow-lg flex items-center gap-2 pointer-events-auto border border-blue-500 shadow-blue-200/50"
-          >
-            <div className="relative flex items-center justify-center">
-              <div className="absolute w-4 h-4 bg-white rounded-full animate-ping opacity-20" />
-              <Navigation className="w-4 h-4 animate-pulse" />
-            </div>
+          <>
+            <motion.div
+              initial={{
+                opacity: 0,
+                x: 20
+              }}
+              animate={{
+                opacity: 1,
+                x: 0
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-full shadow-lg flex items-center gap-2 pointer-events-auto border border-blue-500 shadow-blue-200/50"
+            >
+              <div className="relative flex items-center justify-center">
+                <div className="absolute w-4 h-4 bg-white rounded-full animate-ping opacity-20" />
+                <Navigation className="w-4 h-4 animate-pulse" />
+              </div>
 
-            <span className="text-xs font-black uppercase tracking-widest">
-              Rastreamento ativo
-            </span>
-          </motion.div>
+              <span className="text-xs font-black uppercase tracking-widest">
+                Rastreamento ativo
+              </span>
+            </motion.div>
+
+            <motion.button
+              type="button"
+              initial={{
+                opacity: 0,
+                x: 20
+              }}
+              animate={{
+                opacity: 1,
+                x: 0
+              }}
+              onClick={() => {
+                void wakeLock.requestWakeLock();
+              }}
+              title={
+                wakeLock.isActive
+                  ? 'A tela permanecerá ligada durante a execução.'
+                  : 'Toque para tentar manter a tela ligada. O navegador pode suspender o GPS se a tela bloquear.'
+              }
+              className={`px-3 py-1.5 rounded-full shadow-md border flex items-center gap-2 pointer-events-auto backdrop-blur-md ${
+                wakeLock.isActive
+                  ? 'border-emerald-200 bg-emerald-50/95 text-emerald-700'
+                  : 'border-amber-200 bg-amber-50/95 text-amber-700'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+
+              <span className="text-[10px] font-black uppercase tracking-wider">
+                {wakeLock.isActive
+                  ? 'Tela protegida'
+                  : 'Mantenha a tela ligada'}
+              </span>
+            </motion.button>
+          </>
         )}
 
         {!isTrackingActive && (

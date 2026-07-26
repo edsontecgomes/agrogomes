@@ -13,7 +13,8 @@ import {
   Map as MapIcon,
   ListOrdered as TimelineIcon,
   ArrowLeft,
-  Package
+  Package,
+  Grid3X3
 } from 'lucide-react';
 import { ExecucaoServico, SegmentoExecucao, OrdemServico, Talhao, ChecklistResposta, ChecklistTemplate } from '../../types';
 import { gerarResumoExecucao, formatarDuracao } from '../../utils/reportUtils';
@@ -263,7 +264,7 @@ export function ExecucaoRelatorio({
                 <FastForward className="w-6 h-6" />
              </div>
              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Área Estimada</p>
-             <h4 className="text-3xl font-black text-slate-900">{metricas.areaEstimada.toFixed(2)}<span className="text-sm text-slate-400 ml-1">ha</span></h4>
+             <h4 className="text-3xl font-black text-slate-900">{(exec.areaExecutadaHa ?? metricas.areaEstimada).toFixed(2)}<span className="text-sm text-slate-400 ml-1">ha</span></h4>
           </motion.div>
         </div>
 
@@ -284,7 +285,11 @@ export function ExecucaoRelatorio({
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {produtosAplicados.map((p, idx) => {
                   const isAreaBased = ['Plantio', 'Pulverizacao', 'Adubacao'].includes(ordem?.tipoOperacao || '');
-                  const area = talhao?.area || 0;
+                  const area =
+                    exec.areaExecutadaHa ??
+                    talhao?.area ??
+                    talhao?.areaHa ??
+                    0;
                   const qtyConsumida = isAreaBased && area > 0 ? (p.dose || 0) * area : (p.dose || 0);
 
                   return (
@@ -308,6 +313,106 @@ export function ExecucaoRelatorio({
                   );
                 })}
              </div>
+
+             {exec.consumoEstoqueStatus ===
+               'pendente_cobertura' && (
+               <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">
+                 A baixa de estoque ficou pendente porque não houve
+                 cobertura GPS válida suficiente para calcular a área
+                 realmente trabalhada.
+               </div>
+             )}
+          </motion.section>
+        )}
+
+        {exec.coberturaUEIs && exec.coberturaUEIs.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-100"
+          >
+            <div className="flex flex-col gap-2 mb-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                  <Grid3X3 className="w-4 h-4" />
+                </div>
+                <h3 className="font-bold text-slate-900">
+                  Rastreabilidade por célula produtiva
+                </h3>
+              </div>
+
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                {exec.coberturaUEIs.length} UEI(s) atingida(s)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {exec.coberturaUEIs.map(cobertura => (
+                <div
+                  key={cobertura.ueiId}
+                  className="p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-4"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-black text-slate-800">
+                        {cobertura.codigo ||
+                          cobertura.nome ||
+                          cobertura.ueiId}
+                      </p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        {cobertura.zonaTalhao ===
+                        'faixa_avaliacao_bordadura'
+                          ? 'Bordadura'
+                          : 'Núcleo produtivo'}
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="font-black text-emerald-700">
+                        {cobertura.areaTrabalhadaHa.toFixed(3)} ha
+                      </p>
+                      <p className="text-[10px] font-bold text-slate-400">
+                        {cobertura.percentualCobertura.toFixed(1)}% da UEI
+                      </p>
+                    </div>
+                  </div>
+
+                  {cobertura.materiais.length > 0 && (
+                    <div className="space-y-2 border-t border-slate-200 pt-3">
+                      {cobertura.materiais.map(material => (
+                        <div
+                          key={`${cobertura.ueiId}_${material.produtoId}`}
+                          className="flex items-start justify-between gap-3 text-xs"
+                        >
+                          <div>
+                            <p className="font-bold text-slate-700">
+                              {material.nome}
+                            </p>
+                            {material.lote && (
+                              <p className="text-blue-700 font-semibold">
+                                Lote: {material.lote}
+                              </p>
+                            )}
+                          </div>
+
+                          <p className="font-black text-slate-600 text-right">
+                            {material.quantidadeEstimada.toFixed(3)}{' '}
+                            {material.unidade || ''}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-5 text-xs text-slate-500">
+              Confiança espacial:{' '}
+              {Math.round((exec.confiabilidadeEspacial || 0) * 100)}%
+              {' · '}
+              cálculo baseado apenas em pontos GPS com precisão de até 20 m.
+            </p>
           </motion.section>
         )}
 

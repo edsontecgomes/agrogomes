@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { doc, updateDoc, arrayUnion, collection, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { syncService } from '../services/syncService';
@@ -11,11 +11,26 @@ interface LocationTrackerProps {
 }
 
 export function LocationTracker({ activeExecutions }: LocationTrackerProps) {
+  const activeExecutionsRef = useRef(activeExecutions);
   const pointsBuffer = useRef<{ [execId: string]: any[] }>({});
   const currentSegments = useRef<{ [execId: string]: Partial<SegmentoExecucao> }>({});
   const lastUpdateRef = useRef<{ [execId: string]: number }>({});
   const lastNotificationRef = useRef<{ [key: string]: number }>({});
   const larguraOperacionalRef = useRef<{ [ordemId: string]: number }>({});
+  const flushingRef = useRef(false);
+
+  const executionSignature = useMemo(
+    () =>
+      activeExecutions
+        .map(exec => `${exec.id}:${exec.status}:${exec.ordemId}`)
+        .sort()
+        .join('|'),
+    [activeExecutions]
+  );
+
+  useEffect(() => {
+    activeExecutionsRef.current = activeExecutions;
+  }, [activeExecutions]);
 
   // Memoize largura operacional from orders
   useEffect(() => {
@@ -34,10 +49,10 @@ export function LocationTracker({ activeExecutions }: LocationTrackerProps) {
         }
       }
     });
-  }, [activeExecutions]);
+  }, [executionSignature]);
 
   useEffect(() => {
-    if (activeExecutions.length === 0) return;
+    if (activeExecutionsRef.current.length === 0) return;
 
     const finalizeSegment = async (execId: string) => {
       const segment = currentSegments.current[execId];
@@ -81,9 +96,14 @@ export function LocationTracker({ activeExecutions }: LocationTrackerProps) {
     };
 
     const flushBuffer = async () => {
+      if (flushingRef.current) return;
+      flushingRef.current = true;
+
       for (const execId of Object.keys(pointsBuffer.current)) {
         const points = pointsBuffer.current[execId];
         if (points && points.length > 0) {
+          pointsBuffer.current[execId] = [];
+
           try {
             if (!navigator.onLine || execId.startsWith('offline_')) {
               syncService.enqueue('ADD_PATH_POINT', { execId, points });
@@ -92,30 +112,38 @@ export function LocationTracker({ activeExecutions }: LocationTrackerProps) {
                 path: arrayUnion(...points)
               });
             }
-            pointsBuffer.current[execId] = [];
             lastUpdateRef.current[execId] = Date.now();
           } catch (e) {
             console.error('Error flushing path buffer:', e);
+            pointsBuffer.current[execId] = [
+              ...points,
+              ...(pointsBuffer.current[execId] || [])
+            ];
           }
         }
       }
+
+      flushingRef.current = false;
     };
 
-    const interval = setInterval(flushBuffer, 15000);
+    const interval = window.setInterval(() => {
+      void flushBuffer();
+    }, 5000);
 
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
+    let watchId: number | null = null;
+
+    const handlePosition = (position: GeolocationPosition) => {
         const { latitude, longitude, accuracy } = position.coords;
-        const timestamp = position.timestamp;
         
         const novoPonto = {
           lat: latitude,
           lng: longitude,
           accuracy: accuracy,
-          timestamp: Date.now()
+          timestamp: position.timestamp || Date.now()
         };
 
-        activeExecutions.forEach(async (exec) => {
+        activeExecutionsRef.current.forEach(exec => {
+          void (async () => {
           const segment = currentSegments.current[exec.id];
 
           // 1. GPS Accuracy Check
@@ -214,21 +242,70 @@ export function LocationTracker({ activeExecutions }: LocationTrackerProps) {
             pointsBuffer.current[exec.id] = [];
           }
           pointsBuffer.current[exec.id].push(novoPonto);
+          })();
         });
-      },
-      (error) => console.warn('Location tracking error:', error),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    };
+
+    const startWatch = () => {
+      if (
+        watchId !== null ||
+        document.visibilityState !== 'visible'
+      ) {
+        return;
+      }
+
+      watchId = navigator.geolocation.watchPosition(
+        handlePosition,
+        error => console.warn('Location tracking error:', error),
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    };
+
+    const stopWatch = () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        stopWatch();
+        void flushBuffer();
+
+        Object.keys(currentSegments.current).forEach(execId => {
+          void finalizeSegment(execId);
+        });
+      } else {
+        startWatch();
+      }
+    };
+
+    document.addEventListener(
+      'visibilitychange',
+      handleVisibilityChange
     );
 
+    startWatch();
+
     return () => {
-      clearInterval(interval);
-      navigator.geolocation.clearWatch(watchId);
-      // Finalize any active segments on unmount
+      window.clearInterval(interval);
+      stopWatch();
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibilityChange
+      );
+      void flushBuffer();
+
       Object.keys(currentSegments.current).forEach(execId => {
-        finalizeSegment(execId);
+        void finalizeSegment(execId);
       });
     };
-  }, [activeExecutions]);
+  }, [executionSignature]);
 
   return null;
 }
