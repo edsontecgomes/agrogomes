@@ -1,111 +1,339 @@
-import { ExecucaoServico, SegmentoExecucao, OrdemServico } from '../types';
-import { calcularDistancia, calcularVelocidade } from './geoUtils';
+import {
+  ExecucaoServico,
+  SegmentoExecucao
+} from '../types';
+import {
+  avaliarPontoGPS,
+  PontoGPS
+} from './geoUtils';
 
-/**
- * Calcula o tempo total em segundos em que a máquina estava operando (em segmentos)
- */
-export function calcularTempoOperando(segmentos: SegmentoExecucao[]): number {
-  return segmentos.reduce((acc, seg) => acc + (seg.fimTimestamp - seg.inicioTimestamp) / 1000, 0);
+interface MetricasPontos {
+  distanciaMetros: number;
+  velocidadesKmH: number[];
 }
 
-/**
- * Calcula o tempo total em segundos em que a máquina estava parada ou em pausa
- */
-export function calcularTempoParado(exec: ExecucaoServico, tempoOperando: number): number {
-  const path = exec.path || [];
-  if (path.length < 2) return 0;
-  const duracaoTotal = (path[path.length - 1].timestamp - path[0].timestamp) / 1000;
-  return Math.max(0, duracaoTotal - tempoOperando);
-}
-
-/**
- * Calcula a área estimada coberta em hectares
- */
-export function calcularAreaEstimada(segmentos: SegmentoExecucao[], larguraPadrao: number): number {
-  let distanciaOperacional = 0;
-  segmentos.forEach(seg => {
-    for (let i = 1; i < seg.pontos.length; i++) {
-       distanciaOperacional += calcularDistancia(
-         seg.pontos[i-1].lat, seg.pontos[i-1].lng, 
-         seg.pontos[i].lat, seg.pontos[i].lng
-       );
-    }
-  });
-  return (distanciaOperacional * larguraPadrao) / 10000;
-}
-
-/**
- * Calcula métricas detalhadas de uma execução
- */
-export function gerarResumoExecucao(
-  exec: ExecucaoServico, 
-  segmentos: SegmentoExecucao[], 
-  larguraPadrao: number = 0
-) {
-  const path = exec.path || [];
-  if (path.length === 0) return null;
-
-  // 1. Distância Total
-  let distanciaTotal = 0;
-  let velocidadeMax = 0;
-  for (let i = 1; i < path.length; i++) {
-    const d = calcularDistancia(path[i-1].lat, path[i-1].lng, path[i].lat, path[i].lng);
-    distanciaTotal += d;
-    
-    const v = calcularVelocidade(
-      path[i-1].lat, path[i-1].lng, path[i-1].timestamp,
-      path[i].lat, path[i].lng, path[i].timestamp
-    );
-    if (v > velocidadeMax) velocidadeMax = v;
+function obterTimestamp(
+  valor: unknown
+): number | null {
+  if (valor instanceof Date) {
+    return valor.getTime();
   }
 
-  // 2. Tempo Operando
-  const tempoOperando = calcularTempoOperando(segmentos);
-  
-  // Distância Operacional
-  let distanciaOperacional = 0;
-  segmentos.forEach(seg => {
-    for (let i = 1; i < seg.pontos.length; i++) {
-       distanciaOperacional += calcularDistancia(
-         seg.pontos[i-1].lat, seg.pontos[i-1].lng, 
-         seg.pontos[i].lat, seg.pontos[i].lng
-       );
+  if (
+    valor &&
+    typeof valor === 'object' &&
+    'toDate' in valor &&
+    typeof (
+      valor as {
+        toDate?: unknown;
+      }
+    ).toDate === 'function'
+  ) {
+    return (
+      valor as {
+        toDate: () => Date;
+      }
+    )
+      .toDate()
+      .getTime();
+  }
+
+  return null;
+}
+
+function calcularMetricasPontos(
+  pontos: PontoGPS[]
+): MetricasPontos {
+  let distanciaMetros = 0;
+  const velocidadesKmH: number[] = [];
+
+  for (
+    let indice = 1;
+    indice < pontos.length;
+    indice += 1
+  ) {
+    const pontoAnterior =
+      pontos[indice - 1];
+
+    const pontoAtual = pontos[indice];
+
+    const avaliacao = avaliarPontoGPS(
+      pontoAtual,
+      pontoAnterior
+    );
+
+    if (
+      !avaliacao.valido ||
+      !avaliacao.emMovimento
+    ) {
+      continue;
     }
-  });
 
-  // 3. Tempo Total e Parado
-  const inicio = path[0].timestamp;
-  const fim = path[path.length - 1].timestamp;
-  const duracaoTotal = (fim - inicio) / 1000;
-  const tempoParado = calcularTempoParado(exec, tempoOperando);
+    distanciaMetros +=
+      avaliacao.distanciaMetros;
 
-  // 4. Velocidade Média
-  const velocidadeMedia = tempoOperando > 0 
-    ? (distanciaOperacional / tempoOperando) * 3.6 // km/h
-    : (distanciaTotal / duracaoTotal) * 3.6;
-
-  // 5. Área Estimada Coberta
-  const areaHectares = calcularAreaEstimada(segmentos, larguraPadrao);
+    velocidadesKmH.push(
+      avaliacao.velocidadeKmH
+    );
+  }
 
   return {
-    distanciaTotal, // metros
-    distanciaOperacional, // metros
-    velocidadeMedia, // km/h
-    velocidadeMax: velocidadeMax * 3.6, // km/h
-    tempoOperando, // segundos
-    tempoParado, // segundos
-    duracaoTotal, // segundos
-    areaEstimada: areaHectares, // hectares
+    distanciaMetros,
+    velocidadesKmH
+  };
+}
+
+/**
+ * Usa o percentil 90 para impedir que uma única oscilação do GPS seja
+ * apresentada como velocidade máxima da operação.
+ */
+function calcularVelocidadeMaximaRobusta(
+  velocidadesKmH: number[]
+): number {
+  const velocidadesValidas =
+    velocidadesKmH
+      .filter(
+        (velocidade) =>
+          Number.isFinite(velocidade) &&
+          velocidade >= 0
+      )
+      .sort((a, b) => a - b);
+
+  if (velocidadesValidas.length === 0) {
+    return 0;
+  }
+
+  const indicePercentil90 = Math.floor(
+    (velocidadesValidas.length - 1) * 0.9
+  );
+
+  return velocidadesValidas[
+    indicePercentil90
+  ];
+}
+
+function obterDuracaoTotalSegundos(
+  execucao: ExecucaoServico,
+  pontos: PontoGPS[]
+): number {
+  const inicioExecucao =
+    obterTimestamp(execucao.dataInicio) ??
+    pontos[0]?.timestamp;
+
+  const fimExecucao =
+    obterTimestamp(execucao.dataFim) ??
+    pontos[pontos.length - 1]?.timestamp;
+
+  if (
+    !Number.isFinite(inicioExecucao) ||
+    !Number.isFinite(fimExecucao) ||
+    fimExecucao < inicioExecucao
+  ) {
+    return 0;
+  }
+
+  return (
+    (fimExecucao - inicioExecucao) /
+    1000
+  );
+}
+
+/**
+ * Calcula o tempo total em segundos em que a máquina estava operando.
+ */
+export function calcularTempoOperando(
+  segmentos: SegmentoExecucao[]
+): number {
+  return segmentos.reduce(
+    (total, segmento) => {
+      const duracaoSegmento =
+        (segmento.fimTimestamp -
+          segmento.inicioTimestamp) /
+        1000;
+
+      if (
+        !Number.isFinite(duracaoSegmento) ||
+        duracaoSegmento <= 0
+      ) {
+        return total;
+      }
+
+      return total + duracaoSegmento;
+    },
+    0
+  );
+}
+
+/**
+ * Calcula o tempo total em segundos em que a máquina estava parada.
+ */
+export function calcularTempoParado(
+  execucao: ExecucaoServico,
+  tempoOperando: number
+): number {
+  const pontos =
+    (execucao.path || []) as PontoGPS[];
+
+  const duracaoTotal =
+    obterDuracaoTotalSegundos(
+      execucao,
+      pontos
+    );
+
+  return Math.max(
+    0,
+    duracaoTotal - tempoOperando
+  );
+}
+
+/**
+ * Calcula a área operacional estimada em hectares.
+ */
+export function calcularAreaEstimada(
+  segmentos: SegmentoExecucao[],
+  larguraPadrao: number
+): number {
+  const distanciaOperacional =
+    segmentos.reduce(
+      (distanciaTotal, segmento) => {
+        const metricas =
+          calcularMetricasPontos(
+            segmento.pontos as PontoGPS[]
+          );
+
+        return (
+          distanciaTotal +
+          metricas.distanciaMetros
+        );
+      },
+      0
+    );
+
+  return (
+    (distanciaOperacional *
+      Math.max(0, larguraPadrao)) /
+    10000
+  );
+}
+
+/**
+ * Calcula métricas detalhadas de uma execução.
+ */
+export function gerarResumoExecucao(
+  execucao: ExecucaoServico,
+  segmentos: SegmentoExecucao[],
+  larguraPadrao = 0
+) {
+  const pontos =
+    (execucao.path || []) as PontoGPS[];
+
+  if (pontos.length === 0) return null;
+
+  const metricasTrajeto =
+    calcularMetricasPontos(pontos);
+
+  const metricasSegmentos =
+    segmentos.reduce<MetricasPontos>(
+      (acumulado, segmento) => {
+        const metricas =
+          calcularMetricasPontos(
+            segmento.pontos as PontoGPS[]
+          );
+
+        return {
+          distanciaMetros:
+            acumulado.distanciaMetros +
+            metricas.distanciaMetros,
+          velocidadesKmH: [
+            ...acumulado.velocidadesKmH,
+            ...metricas.velocidadesKmH
+          ]
+        };
+      },
+      {
+        distanciaMetros: 0,
+        velocidadesKmH: []
+      }
+    );
+
+  const duracaoTotal =
+    obterDuracaoTotalSegundos(
+      execucao,
+      pontos
+    );
+
+  const tempoOperando = Math.min(
+    duracaoTotal,
+    calcularTempoOperando(segmentos)
+  );
+
+  const tempoParado = Math.max(
+    0,
+    duracaoTotal - tempoOperando
+  );
+
+  const distanciaOperacional =
+    metricasSegmentos.distanciaMetros;
+
+  const velocidadeMedia =
+    tempoOperando > 0
+      ? (distanciaOperacional /
+          tempoOperando) *
+        3.6
+      : duracaoTotal > 0
+        ? (metricasTrajeto.distanciaMetros /
+            duracaoTotal) *
+          3.6
+        : 0;
+
+  const velocidadesParaMaxima =
+    metricasSegmentos.velocidadesKmH
+      .length > 0
+      ? metricasSegmentos.velocidadesKmH
+      : metricasTrajeto.velocidadesKmH;
+
+  return {
+    distanciaTotal:
+      metricasTrajeto.distanciaMetros,
+    distanciaOperacional,
+    velocidadeMedia,
+    velocidadeMax:
+      calcularVelocidadeMaximaRobusta(
+        velocidadesParaMaxima
+      ),
+    tempoOperando,
+    tempoParado,
+    duracaoTotal,
+    areaEstimada: calcularAreaEstimada(
+      segmentos,
+      larguraPadrao
+    ),
     totalSegmentos: segmentos.length
   };
 }
 
-export function formatarDuracao(segundos: number): string {
-  const h = Math.floor(segundos / 3600);
-  const m = Math.floor((segundos % 3600) / 60);
-  const s = Math.floor(segundos % 60);
-  
-  if (h > 0) return `${h}h ${m}min`;
-  if (m > 0) return `${m}min ${s}s`;
-  return `${s}s`;
+export function formatarDuracao(
+  segundos: number
+): string {
+  const horas = Math.floor(
+    segundos / 3600
+  );
+
+  const minutos = Math.floor(
+    (segundos % 3600) / 60
+  );
+
+  const segundosRestantes = Math.floor(
+    segundos % 60
+  );
+
+  if (horas > 0) {
+    return `${horas}h ${minutos}min`;
+  }
+
+  if (minutos > 0) {
+    return `${minutos}min ${segundosRestantes}s`;
+  }
+
+  return `${segundosRestantes}s`;
 }
