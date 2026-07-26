@@ -77,6 +77,16 @@ export function useOrdensServico(farmId: string | null) {
     try {
       await addDoc(collection(db, 'ordens_servico'), {
         ...ordem,
+        configuracoes: {
+          autoStartPorGeofence:
+            ordem.configuracoes
+              ?.autoStartPorGeofence ??
+            true,
+          exigirConfirmacaoManual:
+            ordem.configuracoes
+              ?.exigirConfirmacaoManual ??
+            true
+        },
         farmId,
         status: 'pendente',
         createdBy: auth.currentUser.uid,
@@ -280,7 +290,11 @@ export function useExecucoesServico(
       lat: number;
       lng: number;
       accuracy?: number;
-    }
+    },
+    origemStart:
+      | 'manual'
+      | 'automatic_geofence' =
+      'manual'
   ) => {
     if (!ordemId || !auth.currentUser) return;
 
@@ -333,7 +347,7 @@ export function useExecucoesServico(
         operadorId: auth.currentUser.uid,
         operadorNome,
         status: 'em_execucao',
-        origemStart: 'manual',
+        origemStart,
         locationStart: location || null,
         path: [],
         maquinaId,

@@ -7,8 +7,12 @@ import {
 } from 'react';
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
 import { point } from '@turf/helpers';
-import { Talhao, OrdemServico } from '../types';
-import { useOrdensServico, useMinhasExecucoesAtivas } from './useServicos';
+
+import { OrdemServico, Talhao } from '../types';
+import {
+  useMinhasExecucoesAtivas,
+  useOrdensServico
+} from './useServicos';
 import { useTalhoes } from './useTalhoes';
 import { criarBufferInternoMetros } from '../modules/geometria/buffer/criarBufferInterno';
 import { criarPoligonoTurf } from '../modules/geometria';
@@ -18,9 +22,26 @@ type CoordenadaTalhao = {
   lng: number;
 };
 
+export type GeofenceStatus =
+  | 'inativo'
+  | 'aguardando_gps'
+  | 'gps_indisponivel'
+  | 'gps_impreciso'
+  | 'sem_limite_seguro'
+  | 'fora_area_segura'
+  | 'sem_ordem'
+  | 'execucao_ativa'
+  | 'sugestao_disponivel'
+  | 'sugestao_ignorada';
+
+type LocalizacaoGeofence = {
+  lat: number;
+  lng: number;
+  accuracy: number;
+};
+
 const DISTANCIA_SEGURA_METROS = 20;
 const PRECISAO_MAXIMA_GPS_METROS = 20;
-const CHECK_INTERVAL = 10000;
 
 function coordenadasValidas(
   valor: unknown
@@ -29,7 +50,7 @@ function coordenadasValidas(
     Array.isArray(valor) &&
     valor.length >= 3 &&
     valor.every(
-      (coordenada) =>
+      coordenada =>
         Number.isFinite(coordenada?.lat) &&
         Number.isFinite(coordenada?.lng)
     )
@@ -67,7 +88,7 @@ function obterCoordenadasGeoJson(
 
   if (
     convertidas.some(
-      (coordenada) =>
+      coordenada =>
         !coordenada ||
         !Number.isFinite(coordenada.lat) ||
         !Number.isFinite(coordenada.lng)
@@ -82,14 +103,6 @@ function obterCoordenadasGeoJson(
 function obterLimiteAtivacao(
   talhao: Talhao
 ): CoordenadaTalhao[] | null {
-  if (
-    coordenadasValidas(
-      talhao.limiteAtivacaoOperacional
-    )
-  ) {
-    return talhao.limiteAtivacaoOperacional;
-  }
-
   const limiteFisico =
     coordenadasValidas(talhao.coordenadas)
       ? talhao.coordenadas
@@ -114,6 +127,24 @@ function obterLimiteAtivacao(
     }
   }
 
+  /*
+   * Compatibilidade com documentos que não
+   * possuem mais o limite físico disponível.
+   *
+   * Um limite de ativação persistido não deve
+   * prevalecer sobre as coordenadas físicas,
+   * porque talhões criados por versões antigas
+   * podem conter recuos percentuais ou distâncias
+   * diferentes dos 20 metros adotados atualmente.
+   */
+  if (
+    coordenadasValidas(
+      talhao.limiteAtivacaoOperacional
+    )
+  ) {
+    return talhao.limiteAtivacaoOperacional;
+  }
+
   if (
     coordenadasValidas(
       talhao.limiteOperacional
@@ -125,59 +156,213 @@ function obterLimiteAtivacao(
   return null;
 }
 
-export function useTalhaoGeofence(farmId: string | null) {
-  const { talhoes } = useTalhoes(farmId || undefined);
+function mensagemDoStatus(
+  status: GeofenceStatus,
+  location: LocalizacaoGeofence | null,
+  currentTalhao: Talhao | null
+) {
+  switch (status) {
+    case 'inativo':
+      return 'Selecione uma fazenda para ativar o geofence.';
+    case 'aguardando_gps':
+      return 'Aguardando uma posição válida do GPS.';
+    case 'gps_indisponivel':
+      return 'Localização indisponível ou sem permissão.';
+    case 'gps_impreciso':
+      return location
+        ? `GPS com precisão de ${Math.round(location.accuracy)} m. Necessário até 20 m.`
+        : 'GPS sem precisão suficiente.';
+    case 'sem_limite_seguro':
+      return 'Nenhum talhão possui limite seguro disponível.';
+    case 'fora_area_segura':
+      return 'Fora da área segura de ativação, 20 m para dentro do talhão.';
+    case 'sem_ordem':
+      return currentTalhao
+        ? `Talhão ${currentTalhao.nome} detectado, mas sem ordem compatível pendente.`
+        : 'Nenhuma ordem compatível encontrada.';
+    case 'execucao_ativa':
+      return 'Já existe uma execução ativa para esta ordem.';
+    case 'sugestao_disponivel':
+      return 'Área segura e ordem pendente confirmadas.';
+    case 'sugestao_ignorada':
+      return 'Sugestão ignorada até sair da área segura ou surgir outra ordem.';
+    default:
+      return 'Geofence em monitoramento.';
+  }
+}
+
+export function useTalhaoGeofence(
+  farmId: string | null
+) {
+  const { talhoes } = useTalhoes(
+    farmId || undefined
+  );
   const { ordens } = useOrdensServico(farmId);
-  const { execucoesAtivas } = useMinhasExecucoesAtivas(farmId);
-  
-  const [currentTalhao, setCurrentTalhao] = useState<Talhao | null>(null);
-  const [suggestedOrdem, setSuggestedOrdem] = useState<OrdemServico | null>(null);
-  const [location, setLocation] = useState<{lat: number, lng: number, accuracy: number} | null>(null);
-  
-  const lastCheckRef = useRef<number>(0);
+  const { execucoesAtivas } =
+    useMinhasExecucoesAtivas(farmId);
 
-  const talhoesComLimiteSeguro =
-    useMemo(
-      () =>
-        talhoes.flatMap(
-          (talhao) => {
-            const coordenadas =
-              obterLimiteAtivacao(
-                talhao
-              );
+  const [
+    currentTalhao,
+    setCurrentTalhao
+  ] = useState<Talhao | null>(null);
 
-            if (!coordenadas) {
-              return [];
+  const [
+    suggestedOrdem,
+    setSuggestedOrdem
+  ] = useState<OrdemServico | null>(null);
+
+  const [
+    location,
+    setLocation
+  ] = useState<LocalizacaoGeofence | null>(
+    null
+  );
+
+  const [
+    geofenceStatus,
+    setGeofenceStatus
+  ] = useState<GeofenceStatus>(
+    farmId ? 'aguardando_gps' : 'inativo'
+  );
+
+  const sugestaoIgnoradaRef = useRef<{
+    ordemId: string;
+    talhaoId: string;
+  } | null>(null);
+
+  const talhoesComLimiteSeguro = useMemo(
+    () =>
+      talhoes.flatMap(talhao => {
+        const coordenadas =
+          obterLimiteAtivacao(talhao);
+
+        if (!coordenadas) {
+          return [];
+        }
+
+        try {
+          return [
+            {
+              talhao,
+              poligono:
+                criarPoligonoTurf(
+                  coordenadas
+                )
             }
+          ];
+        } catch (error) {
+          console.warn(
+            'Limite seguro inválido para o talhão',
+            talhao.id,
+            error
+          );
 
-            try {
-              return [
-                {
-                  talhao,
-                  poligono:
-                    criarPoligonoTurf(
-                      coordenadas
-                    )
-                }
-              ];
-            } catch (error) {
-              console.warn(
-                'Limite seguro inválido para o talhão',
-                talhao.id,
-                error
-              );
+          return [];
+        }
+      }),
+    [talhoes]
+  );
 
-              return [];
-            }
-          }
-        ),
-      [talhoes]
+  useEffect(() => {
+    setLocation(null);
+    setCurrentTalhao(null);
+    setSuggestedOrdem(null);
+    sugestaoIgnoradaRef.current = null;
+    setGeofenceStatus(
+      farmId ? 'aguardando_gps' : 'inativo'
     );
+  }, [farmId]);
 
-  const detectTalhao = useCallback((lat: number, lng: number) => {
-    const pt = point([lng, lat]);
-    
-    let found: Talhao | null = null;
+  useEffect(() => {
+    if (!farmId) {
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setGeofenceStatus('gps_indisponivel');
+      return;
+    }
+
+    const watchId =
+      navigator.geolocation.watchPosition(
+        position => {
+          const {
+            latitude,
+            longitude,
+            accuracy
+          } = position.coords;
+
+          setLocation({
+            lat: latitude,
+            lng: longitude,
+            accuracy
+          });
+        },
+        error => {
+          console.error(
+            'Geofence GPS Error:',
+            error
+          );
+
+          setLocation(null);
+          setCurrentTalhao(null);
+          setSuggestedOrdem(null);
+          setGeofenceStatus(
+            'gps_indisponivel'
+          );
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        }
+      );
+
+    return () =>
+      navigator.geolocation.clearWatch(
+        watchId
+      );
+  }, [farmId]);
+
+  useEffect(() => {
+    if (!farmId) {
+      setGeofenceStatus('inativo');
+      return;
+    }
+
+    if (!location) {
+      return;
+    }
+
+    if (
+      location.accuracy >
+      PRECISAO_MAXIMA_GPS_METROS
+    ) {
+      setCurrentTalhao(null);
+      setSuggestedOrdem(null);
+      setGeofenceStatus('gps_impreciso');
+      return;
+    }
+
+    if (
+      talhoesComLimiteSeguro.length === 0
+    ) {
+      setCurrentTalhao(null);
+      setSuggestedOrdem(null);
+      setGeofenceStatus(
+        'sem_limite_seguro'
+      );
+      return;
+    }
+
+    const pontoAtual = point([
+      location.lng,
+      location.lat
+    ]);
+
+    let talhaoEncontrado: Talhao | null =
+      null;
+
     for (
       const {
         talhao,
@@ -187,91 +372,152 @@ export function useTalhaoGeofence(farmId: string | null) {
       try {
         if (
           booleanPointInPolygon(
-            pt,
+            pontoAtual,
             poligono,
             {
               ignoreBoundary: false
             }
           )
         ) {
-          found = talhao;
+          talhaoEncontrado = talhao;
           break;
         }
-      } catch (e) {
+      } catch (error) {
         console.warn(
           'Erro ao verificar limite seguro do talhão',
           talhao.id,
-          e
+          error
         );
       }
     }
 
-    // Only update if talhao changed
-    if (found?.id !== currentTalhao?.id) {
-      setCurrentTalhao(found);
-      
-      if (found) {
-        // Look for compatible OS (pending, partial, or execution)
-        const compatible = ordens.find(o => 
-          o.talhaoId === found?.id && 
-          ['pendente', 'parcial', 'em_execucao'].includes(o.status)
-        );
-
-        // Check if user already has an active execution for this OS
-        const alreadyRunning = execucoesAtivas.some(e => e.ordemId === compatible?.id);
-
-        if (compatible && !alreadyRunning) {
-          setSuggestedOrdem(compatible);
-        } else {
-          setSuggestedOrdem(null);
-        }
-      } else {
-        setSuggestedOrdem(null);
-      }
+    if (!talhaoEncontrado) {
+      setCurrentTalhao(null);
+      setSuggestedOrdem(null);
+      sugestaoIgnoradaRef.current = null;
+      setGeofenceStatus(
+        'fora_area_segura'
+      );
+      return;
     }
+
+    setCurrentTalhao(
+      talhaoEncontrado
+    );
+
+    const ordemCompativel =
+      ordens.find(
+        ordem =>
+          ordem.talhaoId ===
+            talhaoEncontrado.id &&
+          [
+            'pendente',
+            'parcial',
+            'em_execucao'
+          ].includes(ordem.status) &&
+          ordem.configuracoes
+            ?.autoStartPorGeofence !==
+            false
+      ) ?? null;
+
+    if (!ordemCompativel) {
+      setSuggestedOrdem(null);
+      setGeofenceStatus('sem_ordem');
+      return;
+    }
+
+    const execucaoJaAtiva =
+      execucoesAtivas.some(
+        execucao =>
+          execucao.ordemId ===
+          ordemCompativel.id
+      );
+
+    if (execucaoJaAtiva) {
+      setSuggestedOrdem(null);
+      setGeofenceStatus(
+        'execucao_ativa'
+      );
+      return;
+    }
+
+    const sugestaoIgnorada =
+      sugestaoIgnoradaRef.current;
+
+    if (
+      sugestaoIgnorada?.ordemId ===
+        ordemCompativel.id &&
+      sugestaoIgnorada.talhaoId ===
+        talhaoEncontrado.id
+    ) {
+      setSuggestedOrdem(null);
+      setGeofenceStatus(
+        'sugestao_ignorada'
+      );
+      return;
+    }
+
+    setSuggestedOrdem(
+      ordemCompativel
+    );
+    setGeofenceStatus(
+      'sugestao_disponivel'
+    );
   }, [
+    farmId,
+    location,
     talhoesComLimiteSeguro,
     ordens,
-    currentTalhao,
     execucoesAtivas
   ]);
 
-  useEffect(() => {
-    if (!navigator.geolocation || !farmId || talhoes.length === 0) return;
+  const dismissSuggestion =
+    useCallback(() => {
+      if (
+        suggestedOrdem &&
+        currentTalhao
+      ) {
+        sugestaoIgnoradaRef.current = {
+          ordemId:
+            suggestedOrdem.id,
+          talhaoId:
+            currentTalhao.id
+        };
+      }
 
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        setLocation({ lat: latitude, lng: longitude, accuracy });
+      setSuggestedOrdem(null);
+      setGeofenceStatus(
+        'sugestao_ignorada'
+      );
+    }, [
+      suggestedOrdem,
+      currentTalhao
+    ]);
 
-        if (
-          accuracy >
-          PRECISAO_MAXIMA_GPS_METROS
-        ) {
-          setCurrentTalhao(null);
-          setSuggestedOrdem(null);
-          return;
-        }
-
-        const now = Date.now();
-        if (now - lastCheckRef.current < CHECK_INTERVAL) return;
-        lastCheckRef.current = now;
-
-        detectTalhao(latitude, longitude);
-      },
-      (err) => console.error('Geofence GPS Error:', err),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
-
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [farmId, talhoes, detectTalhao]);
-
-  const dismissSuggestion = () => setSuggestedOrdem(null);
+  const statusMessage = useMemo(
+    () =>
+      mensagemDoStatus(
+        geofenceStatus,
+        location,
+        currentTalhao
+      ),
+    [
+      geofenceStatus,
+      location,
+      currentTalhao
+    ]
+  );
 
   return {
     currentTalhao,
     suggestedOrdem,
     location,
+    geofenceStatus,
+    statusMessage,
+    distanciaSeguraMetros:
+      DISTANCIA_SEGURA_METROS,
+    precisaoMaximaGpsMetros:
+      PRECISAO_MAXIMA_GPS_METROS,
     dismissSuggestion
   };
 }

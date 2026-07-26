@@ -4,6 +4,7 @@ import {
   Clock,
   MapPin,
   PlayCircle,
+  Radar,
   StopCircle,
   Trash2
 } from 'lucide-react';
@@ -71,6 +72,19 @@ export function OrdemCard({
               <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
                 {ordem.tipoOperacao}
               </span>
+
+              {ordem.status !== 'finalizada' &&
+                ordem.configuracoes
+                  ?.autoStartPorGeofence !==
+                  false && (
+                  <span
+                    title="Esta ordem será sugerida quando o operador estiver 20 m dentro do talhão com GPS de até 20 m."
+                    className="inline-flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-emerald-100"
+                  >
+                    <Radar className="w-3 h-3" />
+                    Geofence automático
+                  </span>
+                )}
 
               {activeExecs.length > 0 && (
                 <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">

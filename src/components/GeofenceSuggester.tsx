@@ -4,14 +4,101 @@ import {
   MapPin,
   Navigation,
   PlayCircle,
+  Radar,
   X
 } from 'lucide-react';
 
-import { useTalhaoGeofence } from '../hooks/useTalhaoGeofence';
+import {
+  type GeofenceStatus,
+  useTalhaoGeofence
+} from '../hooks/useTalhaoGeofence';
 import {
   useExecucoesServico,
   useMinhasExecucoesAtivas
 } from '../hooks/useServicos';
+
+type VisualGeofence = {
+  label: string;
+  className: string;
+  iconClassName: string;
+};
+
+function obterVisualGeofence(
+  status: GeofenceStatus
+): VisualGeofence {
+  switch (status) {
+    case 'sugestao_disponivel':
+      return {
+        label: 'Geofence pronto',
+        className:
+          'border-emerald-200 bg-emerald-50/95 text-emerald-700',
+        iconClassName: 'animate-pulse'
+      };
+    case 'gps_impreciso':
+      return {
+        label: 'GPS impreciso',
+        className:
+          'border-amber-200 bg-amber-50/95 text-amber-700',
+        iconClassName: ''
+      };
+    case 'fora_area_segura':
+      return {
+        label: 'Fora da área segura',
+        className:
+          'border-slate-200 bg-white/95 text-slate-600',
+        iconClassName: ''
+      };
+    case 'sem_ordem':
+      return {
+        label: 'Sem OS pendente',
+        className:
+          'border-blue-200 bg-blue-50/95 text-blue-700',
+        iconClassName: ''
+      };
+    case 'execucao_ativa':
+      return {
+        label: 'Execução já ativa',
+        className:
+          'border-blue-200 bg-blue-50/95 text-blue-700',
+        iconClassName: ''
+      };
+    case 'sugestao_ignorada':
+      return {
+        label: 'Sugestão ignorada',
+        className:
+          'border-slate-200 bg-white/95 text-slate-500',
+        iconClassName: ''
+      };
+    case 'gps_indisponivel':
+      return {
+        label: 'GPS indisponível',
+        className:
+          'border-red-200 bg-red-50/95 text-red-700',
+        iconClassName: ''
+      };
+    case 'sem_limite_seguro':
+      return {
+        label: 'Talhão sem limite seguro',
+        className:
+          'border-red-200 bg-red-50/95 text-red-700',
+        iconClassName: ''
+      };
+    case 'inativo':
+      return {
+        label: 'Geofence inativo',
+        className:
+          'border-slate-200 bg-white/95 text-slate-500',
+        iconClassName: ''
+      };
+    default:
+      return {
+        label: 'Geofence monitorando',
+        className:
+          'border-emerald-200 bg-white/95 text-emerald-700',
+        iconClassName: 'animate-pulse'
+      };
+  }
+}
 
 interface GeofenceSuggesterProps {
   farmId: string;
@@ -24,6 +111,8 @@ export function GeofenceSuggester({
     suggestedOrdem,
     location,
     currentTalhao,
+    geofenceStatus,
+    statusMessage,
     dismissSuggestion
   } = useTalhaoGeofence(farmId);
 
@@ -54,13 +143,18 @@ export function GeofenceSuggester({
             lng: location.lng,
             accuracy: location.accuracy
           }
-        : undefined
+        : undefined,
+      'automatic_geofence'
     );
 
     dismissSuggestion();
   };
 
   const isTrackingActive = execucoesAtivas.length > 0;
+
+  const visualGeofence = obterVisualGeofence(
+    geofenceStatus
+  );
 
   return (
     <>
@@ -178,6 +272,29 @@ export function GeofenceSuggester({
 
             <span className="text-xs font-black uppercase tracking-widest">
               Rastreamento ativo
+            </span>
+          </motion.div>
+        )}
+
+        {!isTrackingActive && (
+          <motion.div
+            initial={{
+              opacity: 0,
+              x: 20
+            }}
+            animate={{
+              opacity: 1,
+              x: 0
+            }}
+            title={statusMessage}
+            className={`max-w-[260px] px-3 py-1.5 rounded-full shadow-md border flex items-center gap-2 pointer-events-auto backdrop-blur-md ${visualGeofence.className}`}
+          >
+            <Radar
+              className={`w-3.5 h-3.5 shrink-0 ${visualGeofence.iconClassName}`}
+            />
+
+            <span className="text-[10px] font-black uppercase tracking-wider truncate">
+              {visualGeofence.label}
             </span>
           </motion.div>
         )}
