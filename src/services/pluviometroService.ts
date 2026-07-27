@@ -7,6 +7,10 @@ import {
 
 import { db } from "./firebase";
 import { addOfflineSyncItem } from "./offlineSyncQueue";
+import {
+  shouldFallbackToOffline,
+  withWriteTimeout,
+} from "./resilientWrite";
 import type { Location, Pluviometro } from "../types";
 
 interface CriarPluviometroInput {
@@ -85,17 +89,23 @@ export async function criarPluviometroResiliente(
   }
 
   try {
-    await setDoc(pluviometroRef, {
-      ...payload,
-      createdAt: serverTimestamp(),
-    });
+    await withWriteTimeout(
+      setDoc(pluviometroRef, {
+        ...payload,
+        createdAt: serverTimestamp(),
+      }),
+    );
 
     return {
       pluviometro,
       salvoOffline: false,
     };
   } catch (error) {
-    if (!navigator.onLine) {
+    if (
+      shouldFallbackToOffline(
+        error,
+      )
+    ) {
       adicionarNaFila(pluviometroRef.id, payload);
 
       return {

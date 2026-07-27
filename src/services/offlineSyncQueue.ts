@@ -9,6 +9,8 @@ const OFFLINE_SYNC_QUEUE_KEY =
 export const OFFLINE_SYNC_QUEUE_EVENT =
   "eqtara:offline-sync-queue-changed";
 
+let interruptedItemsRecovered = false;
+
 function notifyQueueChanged() {
   if (typeof window === "undefined") return;
 
@@ -25,7 +27,47 @@ function readQueue(): OfflineSyncItem[] {
   if (!raw) return [];
 
   try {
-    return JSON.parse(raw) as OfflineSyncItem[];
+    const queue = JSON.parse(
+      raw,
+    ) as OfflineSyncItem[];
+
+    if (!interruptedItemsRecovered) {
+      interruptedItemsRecovered = true;
+
+      const recoveredQueue =
+        queue.map((item) =>
+          item.status ===
+          "sincronizando"
+            ? {
+                ...item,
+                status:
+                  "pendente" as const,
+                erro:
+                  "Sincronização anterior interrompida; item reagendado.",
+                updatedAt:
+                  new Date().toISOString(),
+              }
+            : item,
+        );
+
+      if (
+        recoveredQueue.some(
+          (item, index) =>
+            item !== queue[index],
+        )
+      ) {
+        localStorage.setItem(
+          OFFLINE_SYNC_QUEUE_KEY,
+          JSON.stringify(
+            recoveredQueue,
+          ),
+        );
+      }
+
+      return recoveredQueue;
+    }
+
+    return queue;
   } catch {
     return [];
   }
@@ -72,7 +114,46 @@ export function addOfflineSyncItem(params: {
 
   const queue = readQueue();
 
-  writeQueue([...queue, item]);
+  const existingIndex = queue.findIndex(
+    (queuedItem) =>
+      Boolean(params.documentId) &&
+      queuedItem.documentId ===
+        params.documentId &&
+      queuedItem.collectionName ===
+        params.collectionName &&
+      queuedItem.operation ===
+        params.operation,
+  );
+
+  if (existingIndex >= 0) {
+    const existing =
+      queue[existingIndex];
+
+    const updatedItem: OfflineSyncItem =
+      {
+        ...existing,
+        payload: params.payload,
+        status: "pendente",
+        erro: undefined,
+        updatedAt: now,
+      };
+
+    const nextQueue = [
+      ...queue,
+    ];
+
+    nextQueue[existingIndex] =
+      updatedItem;
+
+    writeQueue(nextQueue);
+
+    return updatedItem;
+  }
+
+  writeQueue([
+    ...queue,
+    item,
+  ]);
 
   return item;
 }

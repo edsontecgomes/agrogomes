@@ -246,6 +246,71 @@ describe('permissões operacionais', () => {
   });
 });
 
+describe('pluviometria operacional', () => {
+  test('permite criar pluviômetro e chuva somente na própria fazenda', async () => {
+    const operatorDb = authenticatedDb(OPERATOR_A);
+    const now = Timestamp.now();
+
+    await assertSucceeds(
+      setDoc(doc(operatorDb, 'pluviometros', 'pluv-a'), {
+        nome: 'Pluviômetro A',
+        farmId: FARM_A,
+        location: {
+          lat: -2.5,
+          lng: -54.7,
+          accuracy: 4
+        },
+        createdAt: now
+      })
+    );
+
+    const chuvaData = {
+      mm: 15.5,
+      farmId: FARM_A,
+      userId: OPERATOR_A,
+      pluviometroId: 'pluv-a',
+      location: {
+        lat: -2.5,
+        lng: -54.7,
+        accuracy: 4
+      },
+      source: 'manual',
+      timestamp: now,
+      createdAt: now
+    };
+
+    const batch = writeBatch(operatorDb);
+
+    batch.set(
+      doc(operatorDb, 'chuvas_comunitarias', 'chuva-a'),
+      chuvaData
+    );
+
+    batch.set(
+      doc(operatorDb, 'registros_pessoais', 'registro-a'),
+      {
+        ...chuvaData,
+        month: 7,
+        year: 2026
+      }
+    );
+
+    await assertSucceeds(batch.commit());
+
+    await assertFails(
+      setDoc(doc(operatorDb, 'pluviometros', 'pluv-cruzado'), {
+        nome: 'Pluviômetro inválido',
+        farmId: FARM_B,
+        location: {
+          lat: -2.5,
+          lng: -54.7
+        },
+        createdAt: now
+      })
+    );
+  });
+});
+
 describe('aceite atômico de convite', () => {
   test('aceita uma vez e rejeita reutilização do token', async () => {
     const token = 'convite-operador-a';

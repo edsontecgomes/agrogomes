@@ -16,11 +16,33 @@ import {
 } from "./offlineSyncQueue";
 
 function withCreateMetadata(
+  collectionName: string,
   payload: Record<string, unknown>,
 ) {
+  const {
+    timestampMs,
+    ...remainingPayload
+  } = payload;
+
+  const shouldRestoreTimestamp =
+    collectionName ===
+      "chuvas_comunitarias" ||
+    collectionName ===
+      "registros_pessoais";
+
   return {
-    ...payload,
-    ...(payload.createdAt === undefined
+    ...remainingPayload,
+    ...(shouldRestoreTimestamp &&
+    typeof timestampMs === "number" &&
+    Number.isFinite(timestampMs)
+      ? {
+          timestamp: new Date(
+            timestampMs,
+          ),
+        }
+      : {}),
+    ...(remainingPayload.createdAt ===
+    undefined
       ? { createdAt: serverTimestamp() }
       : {}),
     syncedAt: serverTimestamp(),
@@ -32,7 +54,10 @@ async function syncCreate(
   payload: Record<string, unknown>,
   documentId?: string,
 ) {
-  const data = withCreateMetadata(payload);
+  const data = withCreateMetadata(
+    collectionName,
+    payload,
+  );
 
   if (documentId) {
     await setDoc(

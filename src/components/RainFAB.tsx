@@ -12,19 +12,12 @@ import {
   MapPin
 } from 'lucide-react';
 import { usePluviometros } from '../hooks/usePluviometros';
-import { auth, db } from '../services/firebase';
-import { syncService } from '../services/syncService';
-import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { auth } from '../services/firebase';
 import { handleFirestoreError, OperationType } from '../utils/errorHandling';
 import { Pluviometro, RainFABProps } from '../types';
 import { HighPrecisionFixer } from './HighPrecisionFixer';
 import { criarPluviometroResiliente } from '../services/pluviometroService';
-
-function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-/* ... standard getDistance ... */
-}
-
-/* ... rest of helpers ... */
+import { registrarChuvaResiliente } from '../services/chuvaService';
 
 export function showRainFab(activeModule?: string): boolean {
   if (!activeModule) return false;
@@ -42,6 +35,7 @@ export function RainFAB({ farmId, activeModule }: RainFABProps) {
   const [selectedPluviometro, setSelectedPluviometro] = useState<Pluviometro | null>(null);
   const [newPluviometroName, setNewPluviometroName] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [savedOffline, setSavedOffline] = useState(false);
   const [error, setError] = useState('');
 
   const handleOpen = () => {
@@ -62,6 +56,7 @@ export function RainFAB({ farmId, activeModule }: RainFABProps) {
     setCurrentLocation(null);
     setError('');
     setShowSuccess(false);
+    setSavedOffline(false);
   };
 
   const handleLocationFixed = (loc: { lat: number, lng: number, accuracy: number }) => {
@@ -101,10 +96,28 @@ export function RainFAB({ farmId, activeModule }: RainFABProps) {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
+
+    if (!auth.currentUser) {
+      setError(
+        'Usuário não autenticado.',
+      );
+      return;
+    }
 
     if (!farmId) {
       setError('Fazenda não identificada.');
+      return;
+    }
+
+    const volume = Number(mm);
+
+    if (
+      !Number.isFinite(volume) ||
+      volume <= 0
+    ) {
+      setError(
+        'O volume de chuva deve ser maior que zero.',
+      );
       return;
     }
     
@@ -132,61 +145,40 @@ export function RainFAB({ farmId, activeModule }: RainFABProps) {
         throw new Error('Pluviômetro não selecionado ou criado.');
       }
 
-      const rainData = {
-        mm: Number(mm),
-        location: pLocation,
-        timestamp: Date.now(),
-        userId: auth.currentUser.uid,
-        farmId,
-        pluviometroId: pId,
-        source: 'fab'
-      };
+      const resultado =
+        await registrarChuvaResiliente({
+          mm: volume,
+          location: pLocation,
+          userId: auth.currentUser.uid,
+          farmId,
+          pluviometroId: pId,
+          source: 'fab'
+        });
 
-      if (!navigator.onLine) {
-        syncService.enqueue('CREATE_CHUVA', rainData);
-        setShowSuccess(true);
-        setTimeout(handleClose, 2000);
-        return;
-      }
-
-      const batch = writeBatch(db);
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
-
-      // Community rain record
-      const communityRef = doc(collection(db, 'chuvas_comunitarias'));
-      batch.set(communityRef, {
-        mm: Number(mm),
-        location: pLocation,
-        timestamp: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        userId: auth.currentUser.uid,
-        farmId,
-        pluviometroId: pId,
-        source: 'fab'
-      });
-
-      // Personal rain record
-      const personalRef = doc(collection(db, 'registros_pessoais'));
-      batch.set(personalRef, {
-        mm: Number(mm),
-        month,
-        year,
-        timestamp: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        userId: auth.currentUser.uid,
-        farmId,
-        pluviometroId: pId,
-        source: 'fab'
-      });
-
-      await batch.commit();
+      setSavedOffline(
+        resultado.salvoOffline,
+      );
       setShowSuccess(true);
-      setTimeout(handleClose, 2000);
+
+      if (
+        resultado.salvoOffline
+      ) {
+        setTimeout(
+          handleClose,
+          3000,
+        );
+      } else {
+        setTimeout(
+          handleClose,
+          2000,
+        );
+      }
     } catch (err) {
-      console.error(err);
-      setError('Erro ao salvar registro de chuva.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Erro ao salvar registro de chuva.',
+      );
       handleFirestoreError(err, OperationType.CREATE, 'chuvas');
     } finally {
       setLoading(false);
@@ -265,7 +257,11 @@ export function RainFAB({ farmId, activeModule }: RainFABProps) {
                       <CheckCircle2 className="w-10 h-10" />
                     </div>
                     <h4 className="text-xl font-bold text-slate-900">Registro Salvo!</h4>
-                    <p className="text-slate-500">Obrigado por contribuir com os dados da fazenda.</p>
+                    <p className="text-slate-500">
+                      {savedOffline
+                        ? 'Salvo neste aparelho. A sincronização ocorrerá automaticamente quando a conexão voltar.'
+                        : 'Os dados da chuva foram registrados com sucesso.'}
+                    </p>
                   </div>
                 ) : (
                   <>
@@ -273,7 +269,12 @@ export function RainFAB({ farmId, activeModule }: RainFABProps) {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between text-sm">
                         <span className="font-medium text-slate-700">Localização</span>
-                        {currentLocation ? (
+                        {selectedPluviometro ? (
+                          <span className="flex items-center gap-1.5 text-emerald-600 font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Pluviômetro selecionado
+                          </span>
+                        ) : currentLocation ? (
                           <span className="flex items-center gap-1.5 text-emerald-600 font-medium">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             Detectada
@@ -285,6 +286,49 @@ export function RainFAB({ farmId, activeModule }: RainFABProps) {
                           </span>
                         )}
                       </div>
+
+                      {pluviometros.length > 0 && (
+                        <div className="space-y-2">
+                          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                            Usar pluviômetro cadastrado
+                          </label>
+                          <select
+                            value={selectedPluviometro?.id ?? ''}
+                            onChange={(event) => {
+                              const selected =
+                                pluviometros.find(
+                                  (item) =>
+                                    item.id ===
+                                    event.target.value,
+                                ) ?? null;
+
+                              setSelectedPluviometro(
+                                selected,
+                              );
+
+                              if (selected) {
+                                setShowFixer(false);
+                                setNewPluviometroName('');
+                              }
+                            }}
+                            className="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none"
+                          >
+                            <option value="">
+                              Selecione um pluviômetro
+                            </option>
+                            {pluviometros.map(
+                              (pluviometro) => (
+                                <option
+                                  key={pluviometro.id}
+                                  value={pluviometro.id}
+                                >
+                                  {pluviometro.nome}
+                                </option>
+                              ),
+                            )}
+                          </select>
+                        </div>
+                      )}
 
                       {showFixer ? (
                         <HighPrecisionFixer 
@@ -366,7 +410,17 @@ export function RainFAB({ farmId, activeModule }: RainFABProps) {
 
                     <button
                       type="submit"
-                      disabled={loading || (!selectedPluviometro && !newPluviometroName) || !mm || !currentLocation}
+                      disabled={
+                        loading ||
+                        !mm ||
+                        (
+                          !selectedPluviometro &&
+                          (
+                            !newPluviometroName.trim() ||
+                            !currentLocation
+                          )
+                        )
+                      }
                       className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white font-bold rounded-2xl shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2"
                     >
                       {loading ? (

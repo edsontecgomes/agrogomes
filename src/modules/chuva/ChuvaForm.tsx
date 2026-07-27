@@ -1,7 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../../services/firebase';
-import { syncService } from '../../services/syncService';
+import { auth } from '../../services/firebase';
+import { registrarChuvaResiliente } from '../../services/chuvaService';
 import { criarPluviometroResiliente } from '../../services/pluviometroService';
 import { Pluviometro, ChuvaFormProps } from '../../types';
 import { handleFirestoreError, OperationType } from '../../utils/errorHandling';
@@ -79,7 +78,10 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
 
   // Automatically search and match the rain gauge (pluviômetro) as soon as high precision location is obtained
   useEffect(() => {
-    if (gps.latitude && gps.longitude) {
+    if (
+      gps.latitude !== null &&
+      gps.longitude !== null
+    ) {
       const loc = {
         lat: gps.latitude,
         lng: gps.longitude,
@@ -127,7 +129,20 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
   }, [gps.latitude, gps.longitude, gps.accuracy, pluviometrosDisponiveis, userOverridden, pluviometroId, newPluviometroMode]);
 
   const handleCreatePluviometro = async () => {
-    if (!newPluviometroName.trim() || !currentLocation) return;
+    if (!newPluviometroName.trim()) {
+      setError(
+        'Informe o nome do pluviômetro.',
+      );
+      return;
+    }
+
+    if (!currentLocation) {
+      setError(
+        'Ainda não foi possível obter a localização. Verifique a permissão do GPS e tente novamente.',
+      );
+      gps.retry();
+      return;
+    }
 
     if (!farmId) {
       setError('Fazenda não identificada.');
@@ -188,7 +203,11 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
       );
       setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err) {
-      setError('Erro ao criar pluviômetro.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Erro ao criar pluviômetro.',
+      );
       handleFirestoreError(err, OperationType.CREATE, 'pluviometros');
     } finally {
       setLoading(false);
@@ -229,76 +248,40 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
         throw new Error('Pluviômetro não encontrado.');
       }
 
-      const rainData = {
-        mm: Number(mm),
-        location: selectedPluviometro.location,
-        timestamp: Date.now(),
-        userId: auth.currentUser.uid,
-        farmId,
-        pluviometroId,
-        source: 'manual'
-      };
+      const resultado =
+        await registrarChuvaResiliente({
+          mm: Number(mm),
+          location: selectedPluviometro.location,
+          userId: auth.currentUser.uid,
+          farmId,
+          pluviometroId,
+          source: 'manual'
+        });
 
-      console.log('DEBUG [ChuvaForm]: Attempting to save rain...', { rainData, isOnline: navigator.onLine });
-
-      if (!navigator.onLine) {
-        console.log('DEBUG [ChuvaForm]: Offline mode, enqueuing sync...');
-        syncService.enqueue('CREATE_CHUVA', rainData);
-        setSuccessMessage('Registro salvo localmente. Será sincronizado automaticamente.');
-        setMm('');
-        setPluviometroId('');
-        setTimeout(() => setSuccessMessage(''), 5000);
-        return;
+      if (!resultado.salvoOffline) {
+        void enviarNotificacao({
+          farmId,
+          tipo: 'CHUVA_REGISTRADA',
+          titulo: 'Chuva Registrada',
+          mensagem: `${mm}mm registrados no pluviômetro ${selectedPluviometro.nome}.`,
+          severidade: 'info'
+        });
       }
 
-      const batch = writeBatch(db);
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
-
-      const chuvaComunitariaRef = doc(collection(db, 'chuvas_comunitarias'));
-      const registroPessoalRef = doc(collection(db, 'registros_pessoais'));
-
-      const coreData = {
-        mm: Number(mm),
-        location: selectedPluviometro.location,
-        timestamp: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        userId: auth.currentUser.uid,
-        farmId,
-        pluviometroId,
-        source: 'manual'
-      };
-
-      console.log('DEBUG [ChuvaForm]: Online mode, committing batch...', coreData);
-      
-      batch.set(chuvaComunitariaRef, coreData);
-      batch.set(registroPessoalRef, {
-        ...coreData,
-        month,
-        year,
-      });
-
-      const commitPromise = batch.commit();
-
-      enviarNotificacao({
-        farmId,
-        tipo: 'CHUVA_REGISTRADA',
-        titulo: 'Chuva Registrada',
-        mensagem: `${mm}mm registrados no pluviômetro ${selectedPluviometro.nome}.`,
-        severidade: 'info'
-      });
-
-      await commitPromise;
-      console.log('DEBUG [ChuvaForm]: Save successful!');
-      setSuccessMessage('Registro salvo com sucesso.');
+      setSuccessMessage(
+        resultado.salvoOffline
+          ? 'Registro salvo localmente. Será sincronizado automaticamente.'
+          : 'Registro salvo com sucesso.',
+      );
 
       setMm('');
-      setPluviometroId('');
       setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err) {
-      console.error('DEBUG [ChuvaForm]: Error saving rain:', err);
-      setError('Ocorreu um erro ao salvar o registro. Tente novamente.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Ocorreu um erro ao salvar o registro. Tente novamente.',
+      );
       handleFirestoreError(err, OperationType.CREATE, 'chuvas');
     } finally {
       setLoading(false);
@@ -404,6 +387,11 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
                   Cancelar / Escolher da Lista
                 </button>
               </div>
+              {!currentLocation && (
+                <p className="text-xs text-amber-700">
+                  A criação precisa da localização do aparelho. Mantenha o GPS ativo e permita o acesso à localização.
+                </p>
+              )}
             </div>
           ) : (
             <select
