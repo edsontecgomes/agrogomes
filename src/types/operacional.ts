@@ -195,7 +195,19 @@ export interface ExecucaoServico {
     | "concluida"
     | "sem_cobertura"
     | "erro";
-  consumoEstoqueStatus?: "baixado" | "pendente_cobertura";
+  consumoEstoqueStatus?:
+    | "baixado"
+    | "pendente_cobertura"
+    | "erro_saldo_insuficiente"
+    | "erro";
+  consumoEstoqueExecucaoId?: string;
+  reconciliacaoOperacionalStatus?:
+    | "pendente"
+    | "processando"
+    | "concluida"
+    | "pendente_cobertura"
+    | "erro";
+  reconciliacaoOperacionalErro?: string | null;
   sincronizado?: boolean;
   createdAt: Date;
 }
@@ -263,6 +275,7 @@ export interface OfflineEvent {
     | "CREATE_SEGMENTO"
     | "UPDATE_ORDEM_SERVICO"
     | "CREATE_HORIMETRO"
+    | "RECONCILIAR_EXECUCAO_OPERACIONAL"
     | "CREATE_CHUVA"
     | "SUBMIT_CHECKLIST";
   payload: any;

@@ -33,6 +33,10 @@ globalThis.window = new EventTarget();
 const store = await import(
   "../src/services/offlineOperationalStore.ts"
 );
+const reconciliationCalculations =
+  await import(
+    "../src/services/reconciliacaoOperacionalCalculos.ts"
+  );
 
 test(
   "preserva ordens e datas para consulta offline",
@@ -173,6 +177,97 @@ test(
     assert.equal(
       execution.dataInicio.toISOString(),
       "2026-07-26T12:00:00.000Z",
+    );
+  },
+);
+
+test(
+  "calcula consumo por área com movimento determinístico",
+  () => {
+    const items =
+      reconciliationCalculations
+        .montarItensConsumoReconciliacao(
+          "execucao-1",
+          [
+            {
+              produtoId: "semente-1",
+              nome: "Milho",
+              dose: 18.5,
+              unidade: "kg",
+              lote: "L-2026",
+              origemEstoque:
+                "produtos",
+            },
+          ],
+          "Plantio",
+          2.4,
+        );
+
+    assert.equal(items.length, 1);
+    assert.equal(
+      items[0].quantidade,
+      44.4,
+    );
+    assert.equal(
+      items[0].movimentoId,
+      "execucao-1_consumo_001",
+    );
+    assert.equal(
+      items[0].origemEstoque,
+      "produtos",
+    );
+  },
+);
+
+test(
+  "não baixa insumo por hectare sem cobertura válida",
+  () => {
+    const items =
+      reconciliationCalculations
+        .montarItensConsumoReconciliacao(
+          "execucao-2",
+          [
+            {
+              produtoId: "adubo-1",
+              nome: "Adubo",
+              dose: 100,
+              unidade: "kg",
+            },
+          ],
+          "Adubacao",
+          0,
+        );
+
+    assert.deepEqual(items, []);
+  },
+);
+
+test(
+  "mantém dose fixa em operação não baseada em área",
+  () => {
+    const items =
+      reconciliationCalculations
+        .montarItensConsumoReconciliacao(
+          "execucao-3",
+          [
+            {
+              produtoId: "item-1",
+              nome: "Item",
+              dose: 3,
+              unidade: "un",
+            },
+          ],
+          "Outros",
+          0,
+        );
+
+    assert.equal(
+      items[0].quantidade,
+      3,
+    );
+    assert.equal(
+      items[0].origemEstoque,
+      "estoque",
     );
   },
 );

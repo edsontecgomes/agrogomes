@@ -325,6 +325,26 @@ export function ExecucaoRelatorio({
           </motion.section>
         )}
 
+        {exec.reconciliacaoOperacionalStatus ===
+          'erro' && (
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-[24px] border border-rose-200 bg-rose-50 p-5 text-rose-900"
+          >
+            <p className="font-black">
+              Consolidação operacional pendente
+            </p>
+            <p className="mt-1 text-sm font-medium">
+              {exec.consumoEstoqueStatus ===
+              'erro_saldo_insuficiente'
+                ? 'O trajeto foi preservado, mas o estoque não possui saldo suficiente para concluir a baixa.'
+                : exec.reconciliacaoOperacionalErro ||
+                  'Os dados permanecem na fila e podem ser sincronizados novamente.'}
+            </p>
+          </motion.section>
+        )}
+
         {exec.coberturaUEIs && exec.coberturaUEIs.length > 0 && (
           <motion.section
             initial={{ opacity: 0, y: 10 }}

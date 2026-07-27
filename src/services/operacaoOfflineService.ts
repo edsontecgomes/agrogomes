@@ -534,4 +534,27 @@ export async function finalizarExecucaoOperacional(
     },
     "parcial",
   );
+
+  syncService.enqueue(
+    "RECONCILIAR_EXECUCAO_OPERACIONAL",
+    {
+      execucaoId:
+        params.execucaoId,
+      ordemId: params.ordemId,
+      farmId: params.farmId,
+      ...(params.location
+        ? {
+            locationEnd:
+              params.location,
+          }
+        : {}),
+      ...(params.horimetroFinal !==
+      undefined
+        ? {
+            horimetroFinal:
+              params.horimetroFinal,
+          }
+        : {}),
+    },
+  );
 }

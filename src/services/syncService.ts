@@ -17,6 +17,49 @@ import {
 } from './offlineOperationalStore';
 
 const QUEUE_KEY = 'agri_offline_queue';
+const RECONCILIATION_DELAY_MS = 2_500;
+
+const EXECUTION_DEPENDENCY_TYPES =
+  new Set<OfflineEvent['type']>([
+    'CREATE_EXECUCAO',
+    'UPDATE_EXECUCAO',
+    'ADD_PATH_POINT',
+    'CREATE_SEGMENTO',
+  ]);
+
+function executionIdFromEvent(
+  event: OfflineEvent,
+) {
+  const payload =
+    event.payload as Record<
+      string,
+      any
+    >;
+
+  if (
+    event.type ===
+    'ADD_PATH_POINT'
+  ) {
+    return payload.execId as
+      | string
+      | undefined;
+  }
+
+  if (
+    event.type ===
+      'CREATE_EXECUCAO' ||
+    event.type ===
+      'UPDATE_EXECUCAO'
+  ) {
+    return payload.id as
+      | string
+      | undefined;
+  }
+
+  return payload.execucaoId as
+    | string
+    | undefined;
+}
 
 function withoutUndefined(
   value: unknown,
@@ -122,11 +165,91 @@ class SyncService {
       retries: 0,
     };
 
-    this.queue.push(event);
+    const executionId =
+      executionIdFromEvent(event);
+
+    if (
+      type ===
+        'RECONCILIAR_EXECUCAO_OPERACIONAL' &&
+      executionId
+    ) {
+      const existingReconciliation =
+        this.queue.find(
+          (queuedEvent) =>
+            queuedEvent.type ===
+              'RECONCILIAR_EXECUCAO_OPERACIONAL' &&
+            executionIdFromEvent(
+              queuedEvent,
+            ) === executionId,
+        );
+
+      if (existingReconciliation) {
+        existingReconciliation.payload =
+          payload;
+        existingReconciliation.createdAt =
+          Date.now();
+        existingReconciliation.retries =
+          0;
+        this.saveQueue();
+
+        if (navigator.onLine) {
+          window.setTimeout(
+            () =>
+              void this.processQueue(),
+            RECONCILIATION_DELAY_MS,
+          );
+        }
+
+        return existingReconciliation.id;
+      }
+    }
+
+    if (
+      executionId &&
+      EXECUTION_DEPENDENCY_TYPES.has(
+        type,
+      )
+    ) {
+      const reconciliationIndex =
+        this.queue.findIndex(
+          (queuedEvent) =>
+            queuedEvent.type ===
+              'RECONCILIAR_EXECUCAO_OPERACIONAL' &&
+            executionIdFromEvent(
+              queuedEvent,
+            ) === executionId,
+        );
+
+      if (
+        reconciliationIndex >= 0
+      ) {
+        this.queue.splice(
+          reconciliationIndex,
+          0,
+          event,
+        );
+      } else {
+        this.queue.push(event);
+      }
+    } else {
+      this.queue.push(event);
+    }
+
     this.saveQueue();
 
     if (navigator.onLine) {
-      void this.processQueue();
+      if (
+        type ===
+        'RECONCILIAR_EXECUCAO_OPERACIONAL'
+      ) {
+        window.setTimeout(
+          () =>
+            void this.processQueue(),
+          RECONCILIATION_DELAY_MS,
+        );
+      } else {
+        void this.processQueue();
+      }
     }
 
     return event.id;
@@ -143,10 +266,71 @@ class SyncService {
 
     this.processing = true;
 
-    const toSync = [...this.queue];
+    const toSync = [
+      ...this.queue,
+    ].sort((first, second) => {
+      const firstIsReconciliation =
+        first.type ===
+        'RECONCILIAR_EXECUCAO_OPERACIONAL';
+      const secondIsReconciliation =
+        second.type ===
+        'RECONCILIAR_EXECUCAO_OPERACIONAL';
+
+      if (
+        firstIsReconciliation ===
+        secondIsReconciliation
+      ) {
+        return (
+          first.createdAt -
+          second.createdAt
+        );
+      }
+
+      return firstIsReconciliation
+        ? 1
+        : -1;
+    });
+    let hasDeferredByDelay = false;
 
     try {
       for (const event of toSync) {
+        if (
+          event.type ===
+          'RECONCILIAR_EXECUCAO_OPERACIONAL'
+        ) {
+          const executionId =
+            executionIdFromEvent(
+              event,
+            );
+          const isReady =
+            Date.now() -
+              event.createdAt >=
+            RECONCILIATION_DELAY_MS;
+          const hasDependencies =
+            this.queue.some(
+              (queuedEvent) =>
+                queuedEvent.id !==
+                  event.id &&
+                EXECUTION_DEPENDENCY_TYPES.has(
+                  queuedEvent.type,
+                ) &&
+                executionIdFromEvent(
+                  queuedEvent,
+                ) === executionId,
+            );
+
+          if (
+            !isReady
+          ) {
+            hasDeferredByDelay = true;
+            continue;
+          }
+
+          if (hasDependencies) {
+            continue;
+          }
+        }
+
         try {
           await this.syncEvent(event);
 
@@ -173,12 +357,42 @@ class SyncService {
           // de tentativas.
           this.saveQueue();
 
-          break;
+          // Um item com erro não bloqueia chuvas, checklists
+          // ou outras execuções independentes da fila.
+          continue;
         }
       }
     } finally {
       this.processing = false;
       this.notifyStatus();
+
+      const snapshotEventIds =
+        new Set(
+          toSync.map(
+            (event) => event.id,
+          ),
+        );
+      const hasNewQueuedEvent =
+        this.queue.some(
+          (event) =>
+            !snapshotEventIds.has(
+              event.id,
+            ),
+        );
+
+      if (
+        navigator.onLine &&
+        (hasDeferredByDelay ||
+          hasNewQueuedEvent)
+      ) {
+        window.setTimeout(
+          () =>
+            void this.processQueue(),
+          hasDeferredByDelay
+            ? RECONCILIATION_DELAY_MS
+            : 0,
+        );
+      }
     }
   }
 
@@ -407,6 +621,30 @@ class SyncService {
         break;
       }
 
+      case 'RECONCILIAR_EXECUCAO_OPERACIONAL': {
+        const {
+          reconciliarExecucaoOperacional,
+        } = await import(
+          './reconciliacaoExecucaoOperacionalService'
+        );
+
+        await reconciliarExecucaoOperacional(
+          payload as {
+            execucaoId: string;
+            ordemId: string;
+            farmId: string;
+            locationEnd?: {
+              lat: number;
+              lng: number;
+              accuracy?: number;
+            };
+            horimetroFinal?: number;
+          },
+        );
+
+        break;
+      }
+
       case 'CREATE_CHUVA': {
         const timestampMs =
           typeof payload.timestamp ===
@@ -547,18 +785,7 @@ class SyncService {
     }
 
     const executionId =
-      event.type ===
-      'ADD_PATH_POINT'
-        ? payload.execId
-        : event.type ===
-              'CREATE_EXECUCAO' ||
-            event.type ===
-              'UPDATE_EXECUCAO'
-          ? payload.id
-          : event.type ===
-              'CREATE_SEGMENTO'
-            ? payload.execucaoId
-            : null;
+      executionIdFromEvent(event);
 
     if (!executionId) {
       return;
