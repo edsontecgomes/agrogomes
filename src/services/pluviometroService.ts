@@ -7,6 +7,7 @@ import {
 
 import { db } from "./firebase";
 import { addOfflineSyncItem } from "./offlineSyncQueue";
+import { normalizarLocalizacaoFirestore } from "./locationPayload";
 import {
   shouldFallbackToOffline,
   withWriteTimeout,
@@ -45,12 +46,10 @@ function validarInput(input: CriarPluviometroInput) {
   return {
     nome,
     farmId: input.farmId,
-    location: {
-      lat: input.location.lat,
-      lng: input.location.lng,
-      accuracy: input.location.accuracy,
-      altitude: input.location.altitude,
-    },
+    location:
+      normalizarLocalizacaoFirestore(
+        input.location,
+      ),
   };
 }
 

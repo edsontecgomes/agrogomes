@@ -48,6 +48,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { GeofenceSuggester } from "./components/GeofenceSuggester";
 import { GeolocationTracker } from "./components/GeolocationTracker";
 import { LocationTracker } from "./components/LocationTracker";
+import { OfflineOperationalWarmup } from "./components/OfflineOperationalWarmup";
 import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
 import { RainFAB } from "./components/RainFAB";
 
@@ -766,7 +767,6 @@ function MainAppContent({
 }) {
   const {
     currentFarmId,
-    activeFarm,
     loading:
       loadingFarms,
   } = useFarm();
@@ -895,9 +895,6 @@ function MainAppContent({
   const showOnboardingOnHome =
     accessCount <= 15;
 
-  const isFarmConfigured =
-    activeFarm?.configurada;
-
   if (
     !currentFarmId &&
     !showFarmWizard &&
@@ -924,50 +921,6 @@ function MainAppContent({
         >
           Sair da Conta
         </button>
-      </div>
-    );
-  }
-
-  if (
-    isAdmin &&
-    !isFarmConfigured &&
-    currentFarmId
-  ) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <header className="bg-white border-b border-slate-200 h-16 flex items-center px-6 justify-between">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 text-emerald-700 font-bold text-lg">
-              <Sprout className="w-6 h-6" />
-
-              AgroGomes
-            </div>
-
-            <FarmSelector />
-
-            <div className="text-slate-500 text-sm font-medium">
-              Configuração{" "}
-              {activeFarm?.nome}
-            </div>
-          </div>
-
-          <button
-            onClick={logout}
-            className="text-slate-400 hover:text-slate-600"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
-        </header>
-
-        <main>
-          <FarmSetupWizard
-            farmId={
-              currentFarmId
-            }
-            onComplete={() => {}}
-            usuario={usuario}
-          />
-        </main>
       </div>
     );
   }
@@ -1203,6 +1156,12 @@ function MainAppContent({
 
   return (
     <ErrorBoundary>
+      <OfflineOperationalWarmup
+        farmId={
+          currentFarmId
+        }
+      />
+
       <GeolocationTracker
         farmId={
           currentFarmId ??

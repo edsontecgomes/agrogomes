@@ -2,13 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { usePluviometros } from '../../hooks/usePluviometros';
 import { useChuvasComunitarias } from '../../hooks/useChuvasComunitarias';
 import { useTalhoes } from '../../hooks/useTalhoes';
-import { ChuvaForm } from './ChuvaForm';
 import { Map } from '../../components/Map';
-import { CloudRain, MapPin, Calendar, Plus, Filter } from 'lucide-react';
-import { addDoc, collection } from 'firebase/firestore';
-import { db } from '../../services/firebase';
-
-import { useFarm } from '../../contexts/FarmContext';
+import { CloudRain, MapPin, Calendar, Filter } from 'lucide-react';
 
 interface ChuvaDashboardProps {
   farmId: string;
@@ -17,7 +12,6 @@ interface ChuvaDashboardProps {
 type FilterType = 'hoje' | '7dias' | '30dias' | 'personalizado' | 'todos';
 
 export function ChuvaDashboard({ farmId }: ChuvaDashboardProps) {
-  const { activeFarm } = useFarm();
   const { pluviometros, loading: loadingPluviometros } = usePluviometros(farmId);
   const { chuvasComunitarias, loading: loadingChuvas } = useChuvasComunitarias(farmId);
   const { talhoes } = useTalhoes(farmId);
@@ -25,14 +19,6 @@ export function ChuvaDashboard({ farmId }: ChuvaDashboardProps) {
   const [filterType, setFilterType] = useState<FilterType>('30dias');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
-
-  const handleSeedPluviometro = async () => {
-    await addDoc(collection(db, 'pluviometros'), {
-      nome: 'Pluviômetro Sede',
-      location: { lat: -14.235, lng: -51.925 }, // Center of Brazil
-      farmId
-    });
-  };
 
   const filteredChuvas = useMemo(() => {
     if (filterType === 'todos') return chuvasComunitarias;
@@ -155,26 +141,27 @@ export function ChuvaDashboard({ farmId }: ChuvaDashboardProps) {
       )}
 
       {pluviometros.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between">
-          <p className="text-amber-800 text-sm">Nenhum pluviômetro cadastrado para esta fazenda.</p>
-          <button 
-            onClick={handleSeedPluviometro}
-            className="flex items-center gap-2 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-sm font-medium rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Criar Pluviômetro de Teste
-          </button>
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="rounded-xl bg-amber-100 p-2 text-amber-700">
+            <CloudRain className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-amber-900">
+              Nenhum pluviômetro cadastrado para esta fazenda.
+            </p>
+            <p className="mt-0.5 text-xs text-amber-700">
+              Use o botão flutuante de chuva para cadastrar o primeiro pluviômetro e lançar a leitura.
+            </p>
+          </div>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 space-y-6">
-          <ChuvaForm pluviometros={pluviometros} farmId={farmId} />
-          
+        <div className="lg:col-span-1">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
             <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-slate-400" />
-              Registros no Período
+              Últimas leituras
             </h3>
             
             {filteredChuvas.length === 0 ? (

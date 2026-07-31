@@ -4,6 +4,11 @@ import { db, auth } from '../services/firebase';
 import { useFarm } from '../contexts/FarmContext';
 import { ProdutoEstoque } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandling';
+import {
+  cacheProdutos,
+  getCachedProdutos,
+  OFFLINE_REFERENCE_STORE_EVENT,
+} from '../services/offlineReferenceStore';
 
 export function useProdutosEstoque(farmId: string | null) {
   const [produtos, setProdutos] = useState<ProdutoEstoque[]>([]);
@@ -73,6 +78,28 @@ export function useProdutosEstoque(farmId: string | null) {
       return;
     }
 
+    const readCachedProdutos = () => {
+      const cachedProdutos = getCachedProdutos(farmId);
+
+      if (cachedProdutos.length > 0) {
+        setProdutos(cachedProdutos);
+        setLoading(false);
+      }
+
+      return cachedProdutos;
+    };
+
+    const cachedProdutos = readCachedProdutos();
+
+    const handleReferenceStoreChange = () => {
+      readCachedProdutos();
+    };
+
+    window.addEventListener(
+      OFFLINE_REFERENCE_STORE_EVENT,
+      handleReferenceStoreChange,
+    );
+
     const q = query(
       collection(db, 'produtos'),
       where('farmId', '==', farmId)
@@ -88,14 +115,34 @@ export function useProdutosEstoque(farmId: string | null) {
           updatedAt: d.updatedAt?.toDate ? d.updatedAt.toDate() : d.updatedAt,
         } as unknown as ProdutoEstoque;
       });
+
+      if (
+        snapshot.metadata.fromCache &&
+        !navigator.onLine &&
+        data.length === 0 &&
+        getCachedProdutos(farmId).length > 0
+      ) {
+        setProdutos(getCachedProdutos(farmId));
+        setLoading(false);
+        return;
+      }
+
       setProdutos(data);
+      cacheProdutos(farmId, data);
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'produtos');
+      setProdutos(getCachedProdutos(farmId));
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_REFERENCE_STORE_EVENT,
+        handleReferenceStoreChange,
+      );
+    };
   }, [farmId]);
 
   const criarProduto = async (

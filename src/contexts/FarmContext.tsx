@@ -12,6 +12,10 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../services/firebase";
+import {
+  cacheFazendas,
+  getCachedFazendas,
+} from "../services/offlineReferenceStore";
 import { Fazenda, Usuario } from "../types";
 
 interface FarmContextType {
@@ -56,6 +60,19 @@ export function FarmProvider({
 
     if (!cleanTerm || usuario?.role !== "system_admin") return [];
 
+    if (!navigator.onLine) {
+      const normalizedTerm =
+        cleanTerm.toLocaleLowerCase("pt-BR");
+
+      return getCachedFazendas(usuario.id)
+        .filter((farm) =>
+          (farm.nome || farm.name || "")
+            .toLocaleLowerCase("pt-BR")
+            .includes(normalizedTerm),
+        )
+        .slice(0, 10);
+    }
+
     const q = query(
       collection(db, "fazendas"),
       where("nome", ">=", cleanTerm),
@@ -76,6 +93,28 @@ export function FarmProvider({
     }
 
     setLoading(true);
+    const cachedFarms =
+      getCachedFazendas(usuario.id);
+
+    if (cachedFarms.length > 0) {
+      setFazendas(cachedFarms);
+
+      const savedId =
+        localStorage.getItem("currentFarmId");
+      const savedExists = cachedFarms.some(
+        (farm) => farm.id === savedId,
+      );
+      const fallbackId =
+        savedId && savedExists
+          ? savedId
+          : cachedFarms[0].id;
+
+      setFarmIdInternal(fallbackId);
+      localStorage.setItem(
+        "currentFarmId",
+        fallbackId,
+      );
+    }
 
     if (usuario.role !== "admin" && usuario.role !== "produtor" && usuario.role !== "system_admin") {
       const assignedFarmId = usuario.farmId;
@@ -100,11 +139,15 @@ export function FarmProvider({
           setFazendas([farm]);
           setFarmIdInternal(farm.id);
           localStorage.setItem("currentFarmId", farm.id);
+          cacheFazendas(usuario.id, [farm]);
         })
         .catch((error) => {
           console.error("Farm context get farm error:", error);
-          setFazendas([]);
-          setFarmIdInternal(null);
+
+          if (cachedFarms.length === 0) {
+            setFazendas([]);
+            setFarmIdInternal(null);
+          }
         })
         .finally(() => setLoading(false));
 
@@ -120,7 +163,19 @@ export function FarmProvider({
       farmsQuery,
       (snapshot) => {
         const docs = snapshot.docs.map((d) => normalizeFarm(d.id, d.data()));
+
+        if (
+          snapshot.metadata.fromCache &&
+          docs.length === 0 &&
+          cachedFarms.length > 0
+        ) {
+          setFazendas(cachedFarms);
+          setLoading(false);
+          return;
+        }
+
         setFazendas(docs);
+        cacheFazendas(usuario.id, docs);
 
         if (docs.length > 0) {
           const savedId = localStorage.getItem("currentFarmId");
@@ -153,8 +208,12 @@ export function FarmProvider({
       },
       (error) => {
         console.error("Farm context snapshot error:", error);
-        setFazendas([]);
-        setFarmIdInternal(null);
+
+        if (cachedFarms.length === 0) {
+          setFazendas([]);
+          setFarmIdInternal(null);
+        }
+
         setLoading(false);
       },
     );
@@ -168,7 +227,7 @@ export function FarmProvider({
     setFarmIdInternal(id);
     localStorage.setItem("currentFarmId", id);
 
-    if (usuario?.id) {
+    if (usuario?.id && navigator.onLine) {
       updateDoc(doc(db, "usuarios", usuario.id), {
         primaryFarmId: id,
       }).catch(console.error);

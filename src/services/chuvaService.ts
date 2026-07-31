@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "./firebase";
+import { normalizarLocalizacaoFirestore } from "./locationPayload";
 import {
   addOfflineSyncItem,
 } from "./offlineSyncQueue";
@@ -89,7 +90,10 @@ function validarInput(
 
   return {
     mm: input.mm,
-    location: input.location,
+    location:
+      normalizarLocalizacaoFirestore(
+        input.location,
+      ),
     userId: input.userId,
     farmId: input.farmId,
     pluviometroId:

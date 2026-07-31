@@ -79,6 +79,17 @@ export function useOrdensServico(farmId: string | null) {
           } as OrdemServico;
         });
 
+        if (
+          snapshot.metadata.fromCache &&
+          !navigator.onLine &&
+          ordensData.length === 0 &&
+          getCachedOrdensServico(farmId).length > 0
+        ) {
+          readCachedOrders();
+          setLoading(false);
+          return;
+        }
+
         setOrdens(ordensData);
         cacheOrdensServico(
           farmId,

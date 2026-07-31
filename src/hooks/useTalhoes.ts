@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../services/firebase";
+import {
+  cacheTalhoes,
+  getCachedTalhoes,
+  OFFLINE_REFERENCE_STORE_EVENT,
+} from "../services/offlineReferenceStore";
 import { Talhao } from "../types";
 import { handleFirestoreError } from "../utils/errorHandling";
 
@@ -15,7 +20,17 @@ export function useTalhoes(farmId: string | undefined) {
       return;
     }
 
+    const readCachedTalhoes = () => {
+      setTalhoes(getCachedTalhoes(farmId));
+    };
+
+    readCachedTalhoes();
     setLoading(true);
+
+    window.addEventListener(
+      OFFLINE_REFERENCE_STORE_EVENT,
+      readCachedTalhoes,
+    );
 
     const q = query(collection(db, "talhoes"), where("farmId", "==", farmId));
 
@@ -70,17 +85,35 @@ export function useTalhoes(farmId: string | undefined) {
             new Date(a.createdAt as any).getTime(),
         );
 
+        if (
+          snapshot.metadata.fromCache &&
+          !navigator.onLine &&
+          ordenado.length === 0 &&
+          getCachedTalhoes(farmId).length > 0
+        ) {
+          readCachedTalhoes();
+          setLoading(false);
+          return;
+        }
+
         setTalhoes(ordenado);
+        cacheTalhoes(farmId, ordenado);
         setLoading(false);
       },
       (error) => {
         handleFirestoreError(error, "get" as any, "talhoes");
-        setTalhoes([]);
+        readCachedTalhoes();
         setLoading(false);
       },
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_REFERENCE_STORE_EVENT,
+        readCachedTalhoes,
+      );
+    };
   }, [farmId]);
 
   return { talhoes, loading };

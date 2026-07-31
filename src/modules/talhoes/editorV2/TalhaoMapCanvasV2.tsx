@@ -245,6 +245,7 @@ export function TalhaoMapCanvasV2({
   selectedTalhao,
   coordenadasDesenho,
   corDesenho = "#10b981",
+  mostrarAjudaDesenho = true,
   onSelectTalhao,
   onChangeCoordenadas,
   onAreaCalculada,
@@ -1399,6 +1400,7 @@ export function TalhaoMapCanvasV2({
         )}
 
       {mode === "desenho" &&
+        mostrarAjudaDesenho &&
         !loading &&
         !erro && (
           <div className="pointer-events-none absolute left-4 top-4 max-w-[310px] rounded-2xl border border-white/20 bg-slate-950/85 px-4 py-3 text-white shadow-lg backdrop-blur">

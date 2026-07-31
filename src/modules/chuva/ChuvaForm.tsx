@@ -4,7 +4,7 @@ import { registrarChuvaResiliente } from '../../services/chuvaService';
 import { criarPluviometroResiliente } from '../../services/pluviometroService';
 import { Pluviometro, ChuvaFormProps } from '../../types';
 import { handleFirestoreError, OperationType } from '../../utils/errorHandling';
-import { Droplets, Save, WifiOff, Crosshair, MapPin } from 'lucide-react';
+import { Droplets, Save, WifiOff, Crosshair, MapPin, X } from 'lucide-react';
 import { useHighPrecisionGeolocation } from '../../hooks/useHighPrecisionGeolocation';
 import { enviarNotificacao } from '../../hooks/useNotificacoes';
 
@@ -19,7 +19,12 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * c; // Distance in meters
 }
 
-export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
+export function ChuvaForm({
+  pluviometros,
+  farmId,
+  onSuccess,
+  onCancel,
+}: ChuvaFormProps) {
   const [pluviometroId, setPluviometroId] = useState('');
   const [mm, setMm] = useState('');
   const [loading, setLoading] = useState(false);
@@ -275,7 +280,10 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
       );
 
       setMm('');
-      setTimeout(() => setSuccessMessage(''), 5000);
+      setTimeout(() => {
+        setSuccessMessage('');
+        onSuccess?.();
+      }, resultado.salvoOffline ? 3000 : 2000);
     } catch (err) {
       setError(
         err instanceof Error
@@ -297,12 +305,24 @@ export function ChuvaForm({ pluviometros, farmId }: ChuvaFormProps) {
           </div>
           <h2 className="text-lg font-semibold text-slate-800">Registrar Chuva</h2>
         </div>
-        {!isOnline && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-600 rounded-md text-xs font-medium border border-amber-100">
-            <WifiOff className="w-3.5 h-3.5" />
-            Offline
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {!isOnline && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-600 rounded-md text-xs font-medium border border-amber-100">
+              <WifiOff className="w-3.5 h-3.5" />
+              Offline
+            </div>
+          )}
+          {onCancel && (
+            <button
+              type="button"
+              aria-label="Fechar formulário de chuva"
+              onClick={onCancel}
+              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">

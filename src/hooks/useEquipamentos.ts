@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, doc, setDoc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
+import {
+  cacheEquipamentos,
+  getCachedEquipamentos,
+  OFFLINE_REFERENCE_STORE_EVENT
+} from '../services/offlineReferenceStore';
 import { useFarm } from '../contexts/FarmContext';
 import { Equipamento } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandling';
@@ -26,6 +31,19 @@ export function useEquipamentos(farmId: string | null) {
       return;
     }
 
+    const readCachedEquipamentos = () => {
+      setEquipamentos(
+        getCachedEquipamentos(farmId)
+      );
+    };
+
+    readCachedEquipamentos();
+
+    window.addEventListener(
+      OFFLINE_REFERENCE_STORE_EVENT,
+      readCachedEquipamentos
+    );
+
     const q = query(
       collection(db, 'equipamentos'),
       where('farmId', '==', farmId)
@@ -42,7 +60,13 @@ export function useEquipamentos(farmId: string | null) {
       });
 
       // Se não houver equipamentos cadastrados, gerar alguns iniciais automáticos para facilitar a usabilidade de teste
-      if (snapshot.empty && data.length === 0) {
+      if (
+        snapshot.empty &&
+        data.length === 0 &&
+        navigator.onLine &&
+        !snapshot.metadata.fromCache &&
+        getCachedEquipamentos(farmId).length === 0
+      ) {
         setLoading(true);
         try {
           for (const eq of DEFAULT_EQUIPAMENTOS) {
@@ -63,14 +87,33 @@ export function useEquipamentos(farmId: string | null) {
         }
       }
 
+      if (
+        snapshot.metadata.fromCache &&
+        !navigator.onLine &&
+        data.length === 0 &&
+        getCachedEquipamentos(farmId).length > 0
+      ) {
+        readCachedEquipamentos();
+        setLoading(false);
+        return;
+      }
+
       setEquipamentos(data);
+      cacheEquipamentos(farmId, data);
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'equipamentos');
+      readCachedEquipamentos();
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_REFERENCE_STORE_EVENT,
+        readCachedEquipamentos
+      );
+    };
   }, [farmId]);
 
   const criarEquipamento = async (

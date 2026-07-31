@@ -54,6 +54,8 @@ export type TalhaoMapCanvasV2Props = {
 
   corDesenho?: string;
 
+  mostrarAjudaDesenho?: boolean;
+
   onSelectTalhao(
     talhao: Talhao | null,
   ): void;

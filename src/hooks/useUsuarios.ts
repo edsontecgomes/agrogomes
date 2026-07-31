@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, doc, getDoc, setDoc, orderBy } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
+import {
+  cacheUsuarioProfile,
+  getCachedUsuarioProfile,
+  OFFLINE_REFERENCE_STORE_EVENT
+} from '../services/offlineReferenceStore';
 import { Usuario, Convite } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 
@@ -15,25 +20,51 @@ export function useUsuarioProfile(userId: string | null) {
       return;
     }
 
+    const readCachedUser = () => {
+      const cachedUser =
+        getCachedUsuarioProfile(userId);
+
+      if (cachedUser) {
+        setUsuario(cachedUser);
+      }
+    };
+
+    readCachedUser();
+
+    window.addEventListener(
+      OFFLINE_REFERENCE_STORE_EVENT,
+      readCachedUser
+    );
+
     const userRef = doc(db, 'usuarios', userId);
     const unsubscribe = onSnapshot(userRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setUsuario({ 
+        const remoteUser = {
           id: docSnap.id, 
           ...data,
           createdAt: data.createdAt?.toDate() || new Date()
-        } as Usuario);
+        } as Usuario;
+
+        setUsuario(remoteUser);
+        cacheUsuarioProfile(remoteUser);
       } else {
-        setUsuario(null);
+        readCachedUser();
       }
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, 'get' as any, 'usuarios');
+      readCachedUser();
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_REFERENCE_STORE_EVENT,
+        readCachedUser
+      );
+    };
   }, [userId]);
 
   return { usuario, loading };
@@ -51,26 +82,52 @@ export function useUsuario(farmId: string | null) {
     }
 
     const userId = auth.currentUser.uid;
+    const readCachedUser = () => {
+      const cachedUser =
+        getCachedUsuarioProfile(userId);
+
+      if (cachedUser) {
+        setUsuario(cachedUser);
+      }
+    };
+
+    readCachedUser();
+
+    window.addEventListener(
+      OFFLINE_REFERENCE_STORE_EVENT,
+      readCachedUser
+    );
+
     const userRef = doc(db, 'usuarios', userId);
 
     const unsubscribe = onSnapshot(userRef, async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setUsuario({ 
+        const remoteUser = {
           id: docSnap.id, 
           ...data,
           createdAt: data.createdAt?.toDate() || new Date()
-        } as Usuario);
+        } as Usuario;
+
+        setUsuario(remoteUser);
+        cacheUsuarioProfile(remoteUser);
       } else {
-        setUsuario(null);
+        readCachedUser();
       }
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, 'get' as any, 'usuarios');
+      readCachedUser();
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener(
+        OFFLINE_REFERENCE_STORE_EVENT,
+        readCachedUser
+      );
+    };
   }, [farmId]);
 
   return { usuario, loading };

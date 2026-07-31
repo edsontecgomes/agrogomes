@@ -1,19 +1,82 @@
 import { warmupOperationalModules } from "./warmupOperationalModules";
 
+function getCurrentApplicationUrls() {
+  const urls = new Set<string>([
+    "/",
+    "/manifest.webmanifest",
+    window.location.pathname,
+  ]);
+
+  performance
+    .getEntriesByType("resource")
+    .forEach((entry) => {
+      const url = new URL(entry.name);
+
+      if (
+        url.origin ===
+        window.location.origin
+      ) {
+        urls.add(url.href);
+      }
+    });
+
+  return Array.from(urls);
+}
+
+function askServiceWorkerToCacheCurrentApp(
+  registration:
+    ServiceWorkerRegistration,
+) {
+  const serviceWorker =
+    navigator.serviceWorker.controller ||
+    registration.active ||
+    registration.waiting;
+
+  serviceWorker?.postMessage({
+    type: "CACHE_URLS",
+    urls:
+      getCurrentApplicationUrls(),
+  });
+}
+
 export function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) {
     return;
   }
 
   window.addEventListener("load", () => {
+    let registration:
+      ServiceWorkerRegistration | null =
+      null;
+
     navigator.serviceWorker
       .register("/sw.js")
-      .then(() =>
-        navigator.serviceWorker.ready
+      .then(
+        (registeredServiceWorker) => {
+          registration =
+            registeredServiceWorker;
+
+          return navigator
+            .serviceWorker.ready;
+        },
       )
-      .then(() => {
+      .then((readyRegistration) => {
+        registration =
+          readyRegistration;
+
+        askServiceWorkerToCacheCurrentApp(
+          readyRegistration,
+        );
+
         window.setTimeout(() => {
-          void warmupOperationalModules();
+          void warmupOperationalModules()
+            .then(() => {
+              if (registration) {
+                askServiceWorkerToCacheCurrentApp(
+                  registration,
+                );
+              }
+            });
         }, 1500);
       })
       .catch((error) => {
@@ -24,7 +87,22 @@ export function registerServiceWorker() {
   window.addEventListener(
     "online",
     () => {
-      void warmupOperationalModules();
+      void navigator.serviceWorker.ready
+        .then((registration) => {
+          askServiceWorkerToCacheCurrentApp(
+            registration,
+          );
+
+          return warmupOperationalModules();
+        })
+        .then(() =>
+          navigator.serviceWorker.ready,
+        )
+        .then((registration) => {
+          askServiceWorkerToCacheCurrentApp(
+            registration,
+          );
+        });
     },
   );
 }

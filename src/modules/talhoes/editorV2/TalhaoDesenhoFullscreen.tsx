@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import {
   ArrowLeft,
+  Check,
   Eraser,
-  Redo2,
   RotateCcw,
 } from "lucide-react";
 
@@ -64,60 +64,9 @@ export function TalhaoDesenhoFullscreen({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col bg-slate-950">
-      <header className="flex flex-col gap-3 border-b border-white/10 bg-slate-950 px-4 py-3 text-white shadow-xl sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onCancelar}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/20"
-            aria-label="Cancelar desenho e voltar"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-black sm:text-base">
-                Defina o limite do talhão
-              </p>
-
-              <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-300">
-                Etapa 1 de 2
-              </span>
-            </div>
-
-            <p className="mt-0.5 text-[11px] text-slate-300 sm:text-xs">
-              Toque no mapa para criar pontos. Para corrigir, toque em um ponto e depois na nova posição, ou arraste-o.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 sm:flex">
-          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-              Pontos
-            </p>
-
-            <p className="mt-0.5 text-sm font-black text-white">
-              {totalPontos}
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2">
-            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-300">
-              Área estimada
-            </p>
-
-            <p className="mt-0.5 text-sm font-black text-emerald-200">
-              {areaHa.toFixed(2)} ha
-            </p>
-          </div>
-        </div>
-      </header>
-
-      <main className="relative min-h-0 flex-1 bg-slate-900 p-0 sm:p-3">
-        <div className="h-full [&>div]:h-full [&>div]:min-h-0 [&>div]:rounded-none sm:[&>div]:rounded-3xl [&>div>div:first-child]:h-full">
+    <div className="fixed inset-0 z-[200] h-[100dvh] overflow-hidden bg-slate-950">
+      <main className="absolute inset-0">
+        <div className="h-full [&>div]:h-full [&>div]:min-h-0 [&>div]:rounded-none [&>div]:border-0 [&>div>div:first-child]:h-full">
           <TalhaoMapCanvasV2
             mode="desenho"
             talhoes={talhoes}
@@ -125,6 +74,7 @@ export function TalhaoDesenhoFullscreen({
             coordenadasDesenho={
               coordenadas
             }
+            mostrarAjudaDesenho={false}
             onSelectTalhao={() =>
               undefined
             }
@@ -138,19 +88,72 @@ export function TalhaoDesenhoFullscreen({
         </div>
       </main>
 
-      <footer className="border-t border-white/10 bg-slate-950 px-4 py-3 text-white shadow-2xl sm:px-6 sm:py-4">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="grid grid-cols-2 gap-2 sm:flex">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 bg-gradient-to-b from-slate-950/95 via-slate-950/70 to-transparent px-3 pb-10 pt-3 text-white sm:px-6 sm:pt-5">
+        <header className="pointer-events-auto mx-auto flex max-w-6xl items-start gap-3">
+          <button
+            type="button"
+            onClick={onCancelar}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-slate-950/75 text-white shadow-xl backdrop-blur transition hover:bg-slate-900"
+            aria-label="Cancelar desenho e voltar"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+
+          <div className="min-w-0 flex-1 rounded-2xl border border-white/15 bg-slate-950/75 px-3 py-2.5 shadow-xl backdrop-blur sm:px-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="truncate text-sm font-black sm:text-base">
+                    Defina o limite do talhão
+                  </h1>
+
+                  <span className="hidden rounded-full bg-emerald-400/15 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-300 sm:inline-flex">
+                    Etapa 1 de 2
+                  </span>
+                </div>
+
+                <p className="mt-0.5 truncate text-[10px] text-slate-300 sm:text-xs">
+                  Toque no mapa para criar ou ajustar os vértices.
+                </p>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <div className="rounded-xl bg-white/10 px-2.5 py-1.5 text-center">
+                  <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+                    Pontos
+                  </p>
+                  <p className="text-xs font-black text-white">
+                    {totalPontos}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-emerald-400/15 px-2.5 py-1.5 text-center">
+                  <p className="text-[8px] font-black uppercase tracking-widest text-emerald-300">
+                    Área
+                  </p>
+                  <p className="whitespace-nowrap text-xs font-black text-emerald-200">
+                    {areaHa.toFixed(2)} ha
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+      </div>
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-12 text-white sm:px-6 sm:pb-5">
+        <footer className="pointer-events-auto mx-auto max-w-6xl rounded-3xl border border-white/15 bg-slate-950/85 p-3 shadow-2xl backdrop-blur sm:flex sm:items-center sm:justify-between sm:gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={onDesfazer}
               disabled={
                 totalPontos === 0
               }
-              className="flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-xs font-bold transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-3 text-xs font-bold transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <RotateCcw className="h-4 w-4" />
-              Desfazer ponto
+              Desfazer último
             </button>
 
             <button
@@ -159,18 +162,18 @@ export function TalhaoDesenhoFullscreen({
               disabled={
                 totalPontos === 0
               }
-              className="flex items-center justify-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-xs font-bold text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex items-center justify-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 px-3 py-3 text-xs font-bold text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Eraser className="h-4 w-4" />
-              Limpar tudo
+              Limpar
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:flex">
+          <div className="mt-2 grid grid-cols-[0.8fr_1.2fr] gap-2 sm:mt-0 sm:min-w-[330px]">
             <button
               type="button"
               onClick={onCancelar}
-              className="rounded-xl border border-white/15 bg-transparent px-5 py-3 text-sm font-bold text-slate-200 transition hover:bg-white/10"
+              className="rounded-xl border border-white/15 bg-transparent px-3 py-3 text-xs font-bold text-slate-200 transition hover:bg-white/10"
             >
               Cancelar
             </button>
@@ -179,20 +182,20 @@ export function TalhaoDesenhoFullscreen({
               type="button"
               onClick={onAvancar}
               disabled={!desenhoValido}
-              className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+              className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 py-3 text-xs font-black text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
             >
-              Seguir em frente
-              <Redo2 className="h-4 w-4" />
+              Finalizar desenho
+              <Check className="h-4 w-4" />
             </button>
           </div>
-        </div>
 
-        {!desenhoValido && (
-          <p className="mx-auto mt-2 max-w-6xl text-center text-[11px] text-amber-300 sm:text-right">
-            Marque pelo menos três pontos para liberar a próxima etapa.
-          </p>
-        )}
-      </footer>
+          {!desenhoValido && (
+            <p className="mt-2 text-center text-[10px] font-semibold text-amber-300 sm:absolute sm:bottom-full sm:right-6 sm:mb-2 sm:rounded-full sm:bg-slate-950/85 sm:px-3 sm:py-1.5">
+              Marque pelo menos três pontos para avançar.
+            </p>
+          )}
+        </footer>
+      </div>
     </div>
   );
 }

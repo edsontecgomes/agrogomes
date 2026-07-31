@@ -181,6 +181,19 @@ export function useChecklistTemplates(
           };
         }) as ChecklistTemplate[];
 
+        if (
+          snapshot.metadata.fromCache &&
+          !navigator.onLine &&
+          dados.length === 0 &&
+          getCachedChecklistTemplates(
+            farmId
+          ).length > 0
+        ) {
+          readCachedTemplates();
+          setLoading(false);
+          return;
+        }
+
         setTemplates(dados);
         cacheChecklistTemplates(
           farmId,

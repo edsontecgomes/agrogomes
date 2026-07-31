@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleMapComponent } from './GoogleMapComponent';
+import { OfflineLeafletMap } from './OfflineLeafletMap';
 import { Talhao, Pluviometro, ChuvaComunitaria } from '../../types';
 import { Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 
@@ -38,7 +39,9 @@ export function HybridMap(props: HybridMapProps) {
         {!isOnline ? (
           <>
             <WifiOff className="w-4 h-4 text-amber-500" />
-            <span className="text-slate-700">Aviso: Modo Offline. Conecte-se para carregar o Google Maps.</span>
+            <span className="text-slate-700">
+              Mapa offline: limites e dados salvos no aparelho.
+            </span>
           </>
         ) : !hasGoogleMapsKey ? (
           <>
@@ -54,7 +57,16 @@ export function HybridMap(props: HybridMapProps) {
       </div>
 
       <div className="flex-1 w-full h-full relative z-0">
-        <GoogleMapComponent {...props} />
+        {isOnline ? (
+          <GoogleMapComponent {...props} />
+        ) : (
+          <OfflineLeafletMap
+            talhoes={props.talhoes}
+            pluviometros={props.pluviometros}
+            chuvas={props.chuvas}
+            onTalhaoClick={props.onTalhaoClick}
+          />
+        )}
       </div>
     </div>
   );

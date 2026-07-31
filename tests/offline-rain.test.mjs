@@ -58,6 +58,58 @@ localStorage.setItem(
 const queue = await import(
   "../src/services/offlineSyncQueue.ts"
 );
+const {
+  normalizarLocalizacaoFirestore,
+} = await import(
+  "../src/services/locationPayload.ts"
+);
+
+test(
+  "remove altitude ausente antes de gravar no Firestore",
+  () => {
+    const location =
+      normalizarLocalizacaoFirestore({
+        lat: -2.5,
+        lng: -54.7,
+        accuracy: 9,
+        altitude: undefined,
+      });
+
+    assert.deepEqual(location, {
+      lat: -2.5,
+      lng: -54.7,
+      accuracy: 9,
+    });
+
+    assert.equal(
+      Object.hasOwn(
+        location,
+        "altitude",
+      ),
+      false,
+    );
+  },
+);
+
+test(
+  "preserva altitude válida quando o aparelho informa o valor",
+  () => {
+    const location =
+      normalizarLocalizacaoFirestore({
+        lat: -2.5,
+        lng: -54.7,
+        accuracy: 4,
+        altitude: 86.3,
+      });
+
+    assert.deepEqual(location, {
+      lat: -2.5,
+      lng: -54.7,
+      accuracy: 4,
+      altitude: 86.3,
+    });
+  },
+);
 
 test(
   "recupera item cuja sincronização foi interrompida",

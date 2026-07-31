@@ -8,6 +8,10 @@ import {
 import {
   db,
 } from "../../services/firebase";
+import {
+  cacheUEIs,
+  getCachedUEIs,
+} from "../../services/offlineReferenceStore";
 
 import type {
   UEIEspacial,
@@ -24,6 +28,16 @@ export async function buscarUEIsDaFazenda(
     return [];
   }
 
+  const cachedUEIs =
+    getCachedUEIs(farmId);
+
+  if (
+    typeof navigator !== "undefined" &&
+    !navigator.onLine
+  ) {
+    return cachedUEIs;
+  }
+
   const consulta = query(
     collection(db, "ueis"),
     where(
@@ -33,80 +47,92 @@ export async function buscarUEIsDaFazenda(
     ),
   );
 
-  const snapshot =
-    await getDocs(consulta);
+  try {
+    const snapshot =
+      await getDocs(consulta);
 
-  return snapshot.docs
-    .map((documento) => {
-      const dados =
-        documento.data();
+    const ueis = snapshot.docs
+      .map((documento) => {
+        const dados =
+          documento.data();
 
-      return {
-        id:
-          documento.id,
+        return {
+          id:
+            documento.id,
 
-        producerId:
-          dados.producerId,
+          producerId:
+            dados.producerId,
 
-        farmId:
-          dados.farmId,
+          farmId:
+            dados.farmId,
 
-        talhaoId:
-          dados.talhaoId,
+          talhaoId:
+            dados.talhaoId,
 
-        codigo:
-          dados.codigo,
+          codigo:
+            dados.codigo,
 
-        nome:
-          dados.nome,
+          nome:
+            dados.nome,
 
-        numero:
-          dados.numero,
+          numero:
+            dados.numero,
 
-        areaHa:
-          Number(
-            dados.areaHa ?? 0,
-          ),
+          areaHa:
+            Number(
+              dados.areaHa ?? 0,
+            ),
 
-        geometria:
-          Array.isArray(
-            dados.geometria,
-          )
-            ? dados.geometria
-            : [],
+          geometria:
+            Array.isArray(
+              dados.geometria,
+            )
+              ? dados.geometria
+              : [],
 
-        centroide:
-          dados.centroide,
+          centroide:
+            dados.centroide,
 
-        origem:
-          dados.origem,
+          origem:
+            dados.origem,
 
-        zonaTalhao:
-          dados.zonaTalhao,
+          zonaTalhao:
+            dados.zonaTalhao,
 
-        status:
-          dados.status,
-      } as UEIEspacial;
-    })
-    .filter(
-      (uei) =>
-        validarUEIEspacial(uei)
-          .valida,
-    )
-    .sort((ueiA, ueiB) => {
-      if (
-        ueiA.talhaoId !==
-        ueiB.talhaoId
-      ) {
-        return ueiA.talhaoId
-          .localeCompare(
-            ueiB.talhaoId,
-          );
-      }
+          status:
+            dados.status,
+        } as UEIEspacial;
+      })
+      .filter(
+        (uei) =>
+          validarUEIEspacial(uei)
+            .valida,
+      )
+      .sort((ueiA, ueiB) => {
+        if (
+          ueiA.talhaoId !==
+          ueiB.talhaoId
+        ) {
+          return ueiA.talhaoId
+            .localeCompare(
+              ueiB.talhaoId,
+            );
+        }
 
-      return (
-        Number(ueiA.numero ?? 0) -
-        Number(ueiB.numero ?? 0)
-      );
-    });
+        return (
+          Number(ueiA.numero ?? 0) -
+          Number(ueiB.numero ?? 0)
+        );
+      });
+
+    cacheUEIs(farmId, ueis);
+
+    return ueis;
+  } catch (error) {
+    if (cachedUEIs.length > 0) {
+      return cachedUEIs;
+    }
+
+    throw error;
+  }
 }

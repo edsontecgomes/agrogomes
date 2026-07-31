@@ -11,6 +11,7 @@ import { Usuario } from "../../types";
 import { FarmSelector } from "../FarmSelector";
 import { HealthStatusIndicator } from "../HealthStatusIndicator";
 import { SyncStatus } from "../SyncStatus";
+import { OfflineDataBanner } from "../navigation/OfflineDataBanner";
 
 type MainLayoutProps = {
   user: User;
@@ -131,6 +132,10 @@ export function MainLayout({
           </div>
         </div>
       </header>
+
+      <OfflineDataBanner
+        farmId={currentFarmId}
+      />
 
       {children}
     </div>
