@@ -6,6 +6,7 @@ import React, {
 import { Layers3 } from "lucide-react";
 
 import { useFarm } from "../contexts/FarmContext";
+import { useTalhoes } from "../hooks/useTalhoes";
 import { loadGoogleMaps } from "../services/googleMaps";
 import {
   ChuvaComunitaria,
@@ -17,47 +18,14 @@ import {
   criarCamadaUEIGoogleMaps,
 } from "../modules/motorEspacial/camadaUEIGoogleMaps";
 import { UEIEspacial } from "../modules/motorEspacial/types";
+import {
+  ControleCamadaCoberturaPluviometros,
+  criarCamadaCoberturaPluviometrosGoogleMaps,
+} from "../modules/chuva/mapa/camadaCoberturaPluviometrosGoogleMaps";
 
 interface MapProps {
   pluviometros: Pluviometro[];
   chuvasComunitarias: ChuvaComunitaria[];
-}
-
-function criarConteudoPluviometro(
-  pluviometro: Pluviometro,
-  totalRain: number,
-): HTMLDivElement {
-  const conteudo =
-    document.createElement("div");
-
-  conteudo.style.padding = "8px";
-  conteudo.style.fontFamily = "sans-serif";
-  conteudo.style.color = "#1e293b";
-
-  const titulo =
-    document.createElement("strong");
-
-  titulo.textContent =
-    `Pluviômetro: ${pluviometro.nome}`;
-
-  titulo.style.display = "block";
-  titulo.style.fontSize = "14px";
-  titulo.style.marginBottom = "4px";
-
-  const total =
-    document.createElement("span");
-
-  total.textContent =
-    `Total acumulado: ${totalRain.toFixed(
-      1,
-    )} mm`;
-
-  total.style.fontSize = "12px";
-  total.style.color = "#2563eb";
-
-  conteudo.append(titulo, total);
-
-  return conteudo;
 }
 
 function criarConteudoChuva(
@@ -121,6 +89,9 @@ export function Map({
       null,
     );
 
+  const coberturaPluviometrosRef =
+    useRef<ControleCamadaCoberturaPluviometros | null>(null);
+
   const markersRef =
     useRef<any[]>([]);
 
@@ -141,6 +112,7 @@ export function Map({
     pluviometros[0]?.farmId ??
     chuvasComunitarias[0]?.farmId ??
     "";
+  const { talhoes } = useTalhoes(farmId || undefined);
 
   useEffect(() => {
     let active = true;
@@ -186,6 +158,8 @@ export function Map({
     const limparMapa = () => {
       camadaUEIRef.current?.limpar();
       camadaUEIRef.current = null;
+      coberturaPluviometrosRef.current?.limpar();
+      coberturaPluviometrosRef.current = null;
 
       markersRef.current.forEach(
         (marker) => {
@@ -255,6 +229,7 @@ export function Map({
             google,
             mapa,
             ueis,
+            { talhoes },
           );
 
         const limites =
@@ -271,81 +246,16 @@ export function Map({
           );
         });
 
-        pluviometros.forEach(
-          (pluviometro) => {
-            const totalRain =
-              chuvasComunitarias
-                .filter(
-                  (chuva) =>
-                    chuva.pluviometroId ===
-                    pluviometro.id,
-                )
-                .reduce(
-                  (total, chuva) =>
-                    total + chuva.mm,
-                  0,
-                );
-
-            const posicao = {
-              lat:
-                pluviometro.location.lat,
-              lng:
-                pluviometro.location.lng,
-            };
-
-            limites.extend(posicao);
-
-            const marker =
-              new google.maps.Marker({
-                position: posicao,
-                map: mapa,
-
-                title:
-                  `Pluviômetro: ${pluviometro.nome}`,
-
-                zIndex: 10,
-
-                icon: {
-                  path:
-                    google.maps.SymbolPath
-                      .BACKWARD_CLOSED_ARROW,
-
-                  scale: 7,
-                  fillColor: "#ef4444",
-                  fillOpacity: 1,
-                  strokeColor: "#ffffff",
-                  strokeWeight: 2,
-                },
-              });
-
-            const infoWindow =
-              new google.maps.InfoWindow({
-                content:
-                  criarConteudoPluviometro(
-                    pluviometro,
-                    totalRain,
-                  ),
-              });
-
-            marker.addListener(
-              "click",
-              () => {
-                infoWindow.open(
-                  mapa,
-                  marker,
-                );
-              },
-            );
-
-            markersRef.current.push(
-              marker,
-            );
-
-            infoWindowsRef.current.push(
-              infoWindow,
-            );
-          },
-        );
+        pluviometros.forEach((pluviometro) => {
+          limites.extend(pluviometro.location);
+        });
+        coberturaPluviometrosRef.current =
+          criarCamadaCoberturaPluviometrosGoogleMaps(
+            google,
+            mapa,
+            pluviometros,
+            chuvasComunitarias,
+          );
 
         chuvasComunitarias.forEach(
           (chuva, index) => {
@@ -461,6 +371,7 @@ export function Map({
     pluviometros,
     chuvasComunitarias,
     ueis,
+    talhoes,
   ]);
 
   return (

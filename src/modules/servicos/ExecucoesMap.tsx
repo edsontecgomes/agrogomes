@@ -14,6 +14,7 @@ import {
 import { useSegmentosExecucao } from "../../hooks/useSegmentos";
 import { useTodasExecucoesServico } from "../../hooks/useServicos";
 import { useUsuarios } from "../../hooks/useUsuarios";
+import { useTalhoes } from "../../hooks/useTalhoes";
 import { loadGoogleMaps } from "../../services/googleMaps";
 import { Estoque, Usuario } from "../../types";
 import { buscarUEIsDaFazenda } from "../motorEspacial/buscarUEIsDaFazenda";
@@ -117,6 +118,7 @@ export function ExecucoesMap({
   } = useUsuarios(farmId);
 
   const usuarios = usuariosProp ?? usuariosHook;
+  const { talhoes } = useTalhoes(farmId);
 
   const [filterDataInicio, setFilterDataInicio] =
     useState("");
@@ -399,6 +401,10 @@ export function ExecucoesMap({
               ajustarEnquadramento:
                 Boolean(talhaoId) &&
                 ueis.length > 0,
+              talhoes,
+              ordemServicoAtiva: filteredExecucoes.some(
+                (execucao) => execucao.status === "em_execucao",
+              ),
             },
           );
 
@@ -612,6 +618,7 @@ export function ExecucoesMap({
     talhaoId,
     ueis,
     usuarios,
+    talhoes,
   ]);
 
   const loading =

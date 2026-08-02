@@ -31,6 +31,8 @@ import {
   ClipboardList,
   CloudRain,
   Fuel,
+  FlaskConical,
+  Globe2,
   Info,
   LayoutDashboard,
   Leaf,
@@ -73,8 +75,10 @@ import { Usuario } from "./types";
 import { handleFirestoreError } from "./utils/errorHandling";
 
 type ActiveModule =
+  | "mapa_global"
   | "dashboard"
   | "agronomia"
+  | "solo"
   | "chuvas"
   | "servicos"
   | "talhoes"
@@ -782,7 +786,9 @@ function MainAppContent({
     activeModule,
     setActiveModule,
   ] = useState<ActiveModule>(
-    "dashboard",
+    usuario.role === "system_admin"
+      ? "mapa_global"
+      : "dashboard",
   );
 
   const [
@@ -986,7 +992,20 @@ function MainAppContent({
     danger?: boolean;
 
     hideWhenOnboardingHome?: boolean;
+
+    systemAdminOnly?: boolean;
   }> = [
+    {
+      id: "mapa_global",
+
+      label: "Visão Global",
+
+      icon: (
+        <Globe2 className="w-4 h-4" />
+      ),
+
+      systemAdminOnly: true,
+    },
     {
       id: "dashboard",
 
@@ -1004,6 +1023,16 @@ function MainAppContent({
 
       icon: (
         <Leaf className="w-4 h-4" />
+      ),
+    },
+
+    {
+      id: "solo",
+
+      label: "Solo",
+
+      icon: (
+        <FlaskConical className="w-4 h-4" />
       ),
     },
 
@@ -1136,6 +1165,14 @@ function MainAppContent({
   const visibleNavigationItems =
     navigationItems.filter(
       (item) => {
+        if (isSystemAdmin) {
+          return item.systemAdminOnly === true;
+        }
+
+        if (item.systemAdminOnly) {
+          return false;
+        }
+
         if (
           item.adminOnly &&
           !isAdmin
@@ -1156,27 +1193,19 @@ function MainAppContent({
 
   return (
     <ErrorBoundary>
-      <OfflineOperationalWarmup
-        farmId={
-          currentFarmId
-        }
-      />
+      {!isSystemAdmin && (
+        <>
+          <OfflineOperationalWarmup farmId={currentFarmId} />
 
-      <GeolocationTracker
-        farmId={
-          currentFarmId ??
-          usuario.farmId ??
-          ""
-        }
-      />
+          <GeolocationTracker
+            farmId={currentFarmId ?? usuario.farmId ?? ""}
+          />
 
-      <NotificationToast
-        farmId={
-          currentFarmId ??
-          usuario.farmId ??
-          ""
-        }
-      />
+          <NotificationToast
+            farmId={currentFarmId ?? usuario.farmId ?? ""}
+          />
+        </>
+      )}
 
       <MainLayout
         user={user}
@@ -1225,6 +1254,7 @@ function MainAppContent({
           }
           usuario={usuario}
           isAdmin={isAdmin}
+          isSystemAdmin={isSystemAdmin}
           showOnboardingOnHome={
             showOnboardingOnHome
           }
@@ -1237,27 +1267,22 @@ function MainAppContent({
           }
         />
 
-        <RainFAB
-          farmId={
-            currentFarmId
-          }
-          activeModule={
-            activeModule
-          }
-        />
+        {!isSystemAdmin && (
+          <>
+            <RainFAB
+              farmId={currentFarmId}
+              activeModule={activeModule}
+            />
 
-        <GeofenceSuggester
-          farmId={
-            currentFarmId ??
-            ""
-          }
-        />
+            <GeofenceSuggester
+              farmId={currentFarmId ?? ""}
+            />
 
-        <LocationTracker
-          activeExecutions={
-            execucoesAtivas
-          }
-        />
+            <LocationTracker
+              activeExecutions={execucoesAtivas}
+            />
+          </>
+        )}
 
         <PWAInstallPrompt />
       </MainLayout>

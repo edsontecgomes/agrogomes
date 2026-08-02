@@ -48,14 +48,12 @@ service cloud.firestore {
     }
 
     function hasFarmAccess(farmId) {
-      return isSystemAdmin()
-        || isFarmOwner(farmId)
+      return isFarmOwner(farmId)
         || isAssignedToFarm(farmId);
     }
 
     function isFarmManager(farmId) {
-      return isSystemAdmin()
-        || isFarmOwner(farmId)
+      return isFarmOwner(farmId)
         || (
           isAssignedToFarm(farmId)
           && getUserRole() in ['admin', 'produtor', 'gerente']
@@ -136,7 +134,6 @@ service cloud.firestore {
     match /usuarios/{userId} {
       allow get: if isAuthenticated() && (
         request.auth.uid == userId
-        || isSystemAdmin()
         || (
           resource.data.farmId is string
           && isFarmManager(resource.data.farmId)
@@ -144,8 +141,7 @@ service cloud.firestore {
       );
 
       allow list: if isAuthenticated() && (
-        isSystemAdmin()
-        || (
+        (
           resource.data.farmId is string
           && isFarmManager(resource.data.farmId)
         )
@@ -158,15 +154,14 @@ service cloud.firestore {
         );
 
       allow update: if isAuthenticated() && (
-        isSystemAdmin()
-        || (
+        (
           request.auth.uid == userId
           && incoming().diff(existing()).affectedKeys()
             .hasOnly(['primaryFarmId', 'nome', 'email', 'updatedAt'])
         )
       );
 
-      allow delete: if isAuthenticated() && isSystemAdmin();
+      allow delete: if false;
     }
 
     match /convites/{conviteId} {
@@ -212,16 +207,11 @@ service cloud.firestore {
         && incoming().id == farmId;
 
       allow update: if isAuthenticated()
-        && (
-          isSystemAdmin()
-          || resource.data.producerId == request.auth.uid
-        )
+        && resource.data.producerId == request.auth.uid
         && incoming().producerId == existing().producerId;
 
-      allow delete: if isAuthenticated() && (
-        isSystemAdmin()
-        || resource.data.producerId == request.auth.uid
-      );
+      allow delete: if isAuthenticated()
+        && resource.data.producerId == request.auth.uid;
     }
 
     // =============================================================
@@ -355,6 +345,17 @@ service cloud.firestore {
       ];
     }
 
+    // O System Admin possui somente leitura cartográfica global.
+    // Talhões e UEIs são as únicas estruturas da fazenda liberadas
+    // além do cadastro básico em /fazendas.
+    match /talhoes/{talhaoId} {
+      allow read: if isAuthenticated() && isSystemAdmin();
+    }
+
+    match /ueis/{ueiId} {
+      allow read: if isAuthenticated() && isSystemAdmin();
+    }
+
     match /{collectionName}/{documentId} {
       allow read: if isManagedCollection(collectionName)
         && isAuthenticated()
@@ -399,6 +400,9 @@ service cloud.firestore {
         'analisesSolo',
         'operacoesAgronomicas',
         'produtividadesAgronomicas',
+        'pontos_coleta_solo',
+        'coletas_solo',
+        'amostras_compostas_solo',
         'registrosEconomicosAgronomicos',
         'indicesAgronomicos',
         'relacoesAgronomicas',
@@ -444,8 +448,7 @@ service cloud.firestore {
 
     match /templatesPlanoManejo/{templateId} {
       allow read: if isAuthenticated() && (
-        isSystemAdmin()
-        || existing().producerId == request.auth.uid
+        existing().producerId == request.auth.uid
         || hasFarmAccess(existing().farmId)
       );
 
@@ -457,14 +460,12 @@ service cloud.firestore {
       allow update: if isAuthenticated()
         && incoming().producerId == existing().producerId
         && (
-          isSystemAdmin()
-          || existing().producerId == request.auth.uid
+          existing().producerId == request.auth.uid
           || isFarmManager(existing().farmId)
         );
 
       allow delete: if isAuthenticated() && (
-        isSystemAdmin()
-        || existing().producerId == request.auth.uid
+        existing().producerId == request.auth.uid
         || isFarmManager(existing().farmId)
       );
     }

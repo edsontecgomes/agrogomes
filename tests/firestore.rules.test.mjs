@@ -26,6 +26,7 @@ const OWNER_B = 'proprietario-b';
 const MANAGER_A = 'gerente-a';
 const OPERATOR_A = 'operador-a';
 const OPERATOR_B = 'operador-b';
+const SYSTEM_ADMIN = 'system-admin';
 
 let testEnv;
 
@@ -72,6 +73,12 @@ async function seedDatabase() {
         farmId: FARM_B,
         createdAt: now
       }),
+      setDoc(doc(adminDb, 'usuarios', SYSTEM_ADMIN), {
+        id: SYSTEM_ADMIN,
+        nome: 'Suporte Eqtara',
+        role: 'system_admin',
+        createdAt: now
+      }),
       setDoc(doc(adminDb, 'ordens_servico', 'ordem-a'), {
         id: 'ordem-a',
         farmId: FARM_A,
@@ -102,6 +109,15 @@ async function seedDatabase() {
         nome: 'Talhão A',
         area: 10,
         createdAt: now
+      }),
+      setDoc(doc(adminDb, 'ueis', 'uei-a'), {
+        id: 'uei-a',
+        farmId: FARM_A,
+        talhaoId: 'talhao-a',
+        codigo: 'TALHAO-A-UEI-0001',
+        areaHa: 1,
+        geometria: [],
+        createdAt: now
       })
     ]);
   });
@@ -127,6 +143,22 @@ beforeEach(async () => {
 
 after(async () => {
   await testEnv?.cleanup();
+});
+
+describe('visão cartográfica do System Admin', () => {
+  test('permite fazendas, talhões e UEIs e bloqueia dados estratégicos', async () => {
+    const adminDb = authenticatedDb(SYSTEM_ADMIN);
+    await assertSucceeds(getDoc(doc(adminDb, 'fazendas', FARM_A)));
+    await assertSucceeds(getDoc(doc(adminDb, 'talhoes', 'talhao-a')));
+    await assertSucceeds(getDoc(doc(adminDb, 'ueis', 'uei-a')));
+    await assertFails(getDoc(doc(adminDb, 'ordens_servico', 'ordem-a')));
+    await assertFails(getDocs(collection(adminDb, 'usuarios')));
+  });
+
+  test('nega alterações cartográficas ao System Admin', async () => {
+    const adminDb = authenticatedDb(SYSTEM_ADMIN);
+    await assertFails(updateDoc(doc(adminDb, 'talhoes', 'talhao-a'), { nome: 'Alterado' }));
+  });
 });
 
 describe('isolamento por fazenda', () => {

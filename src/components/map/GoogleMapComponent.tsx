@@ -1,11 +1,15 @@
-import React, { useCallback, useState } from 'react';
-import { GoogleMap, useJsApiLoader, Polygon, Marker, InfoWindow, DrawingManager } from '@react-google-maps/api';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { GoogleMap, useJsApiLoader, Polygon, Marker, InfoWindow, DrawingManager, Circle } from '@react-google-maps/api';
 import { Talhao, Pluviometro, ChuvaComunitaria } from '../../types';
+import type { UEIEspacial } from '../../modules/motorEspacial/types';
+import { resolverPresencaOperacional } from '../../modules/motorEspacial/presencaOperacional';
+import { RAIO_COBERTURA_PLUVIOMETRO_METROS } from '../../modules/chuva/mapa/camadaCoberturaPluviometrosGoogleMaps';
 
 interface GoogleMapComponentProps {
   talhoes?: Talhao[];
   pluviometros?: Pluviometro[];
   chuvas?: ChuvaComunitaria[];
+  ueis?: UEIEspacial[];
   farmId: string;
   userRole: string;
   onPolygonCreated?: (geojson: any, area: number) => void;
@@ -22,6 +26,7 @@ export function GoogleMapComponent({
   talhoes = [], 
   pluviometros = [], 
   chuvas = [], 
+  ueis = [],
   userRole,
   onPolygonCreated,
   onPolygonDeleted,
@@ -29,8 +34,23 @@ export function GoogleMapComponent({
 }: GoogleMapComponentProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
 
   const canManage = userRole === 'admin' || userRole === 'gerente';
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      ({ coords }) => setUserLocation({ lat: coords.latitude, lng: coords.longitude, accuracy: coords.accuracy }),
+      () => setUserLocation(null),
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
+  const presenca = useMemo(
+    () => userLocation ? resolverPresencaOperacional(userLocation, talhoes, ueis) : null,
+    [talhoes, ueis, userLocation],
+  );
+  const corLocalizacao = presenca?.status === 'dentro' ? '#facc15' : presenca?.status === 'gps_impreciso' ? '#94a3b8' : '#2563eb';
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -113,6 +133,7 @@ export function GoogleMapComponent({
   if (!isLoaded) return <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-500">Carregando mapa...</div>;
 
   return (
+    <div className="relative h-full w-full">
     <GoogleMap
       mapContainerStyle={containerStyle}
       zoom={4}
@@ -172,6 +193,15 @@ export function GoogleMapComponent({
       })}
 
       {pluviometros.map(pluv => (
+        <Circle
+          key={`${pluv.id}-cobertura`}
+          center={{ lat: pluv.location.lat, lng: pluv.location.lng }}
+          radius={RAIO_COBERTURA_PLUVIOMETRO_METROS}
+          options={{ fillColor: '#38bdf8', fillOpacity: 0.1, strokeColor: '#0284c7', strokeOpacity: 0.45, strokeWeight: 1 }}
+        />
+      ))}
+
+      {pluviometros.map(pluv => (
         <Marker
           key={pluv.id}
           position={{ lat: pluv.location.lat, lng: pluv.location.lng }}
@@ -194,6 +224,12 @@ export function GoogleMapComponent({
           onClick={() => setSelectedItem({ type: 'chuva', data: chuva, position: { lat: chuva.location.lat, lng: chuva.location.lng } })}
         />
       ))}
+
+      {userLocation && <Marker
+        position={userLocation}
+        title="Sua localização"
+        icon={{ path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: corLocalizacao, fillOpacity: presenca?.status === 'gps_impreciso' ? 0.65 : 1, strokeColor: '#fff', strokeWeight: 2.5 }}
+      />}
 
       {selectedItem && (
         <InfoWindow
@@ -241,5 +277,9 @@ export function GoogleMapComponent({
         </InfoWindow>
       )}
     </GoogleMap>
+    <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 w-[min(92%,360px)] -translate-x-1/2 rounded-2xl bg-slate-950/90 px-4 py-3 text-xs font-bold text-white shadow-xl backdrop-blur">
+      {!presenca ? 'Localização indisponível' : presenca.status === 'gps_impreciso' ? `GPS impreciso — posição não confirmada (${Math.round(presenca.precisaoMetros)} m)` : presenca.status === 'dentro' ? <>Área operacional ativa<br /><span className="text-slate-300">Talhão: {presenca.talhaoNome}</span><br /><span className="text-yellow-300">UEI: {presenca.ueiCodigo ?? 'não identificada'}</span></> : <>Fora da área operacional<br /><span className="text-slate-400">Nenhuma UEI identificada</span></>}
+    </div>
+    </div>
   );
 }

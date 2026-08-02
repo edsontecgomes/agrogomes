@@ -10,6 +10,14 @@ export interface Pluviometro {
   nome: string;
   location: Location;
   farmId: string;
+  indiceConfiabilidade?: number;
+  ultimaVerificacaoEm?: Date | string;
+  situacaoOperacional?:
+    | "operacional"
+    | "verificacao_pendente"
+    | "inativo"
+    | "sem_leitura"
+    | string;
 }
 
 export interface ChuvaComunitaria {
@@ -24,6 +32,7 @@ export interface ChuvaComunitaria {
   source?: "manual" | "sensor";
   month?: number;
   year?: number;
+  confiabilidade?: number;
 }
 
 export interface NotificacaoOperacional {

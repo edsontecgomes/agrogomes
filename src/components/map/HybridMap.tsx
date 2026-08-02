@@ -3,6 +3,8 @@ import { GoogleMapComponent } from './GoogleMapComponent';
 import { OfflineLeafletMap } from './OfflineLeafletMap';
 import { Talhao, Pluviometro, ChuvaComunitaria } from '../../types';
 import { Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+import type { UEIEspacial } from '../../modules/motorEspacial/types';
+import { buscarUEIsDaFazenda } from '../../modules/motorEspacial/buscarUEIsDaFazenda';
 
 interface HybridMapProps {
   talhoes?: Talhao[];
@@ -17,6 +19,7 @@ interface HybridMapProps {
 
 export function HybridMap(props: HybridMapProps) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [ueis, setUeis] = useState<UEIEspacial[]>([]);
   const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const hasGoogleMapsKey = Boolean(key && typeof key === 'string' && key.length > 15 && key !== 'undefined');
 
@@ -32,6 +35,10 @@ export function HybridMap(props: HybridMapProps) {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  useEffect(() => {
+    void buscarUEIsDaFazenda(props.farmId).then(setUeis).catch(() => setUeis([]));
+  }, [props.farmId]);
 
   return (
     <div className="relative w-full h-full flex flex-col bg-slate-100 rounded-2xl overflow-hidden">
@@ -58,12 +65,13 @@ export function HybridMap(props: HybridMapProps) {
 
       <div className="flex-1 w-full h-full relative z-0">
         {isOnline ? (
-          <GoogleMapComponent {...props} />
+          <GoogleMapComponent {...props} ueis={ueis} />
         ) : (
           <OfflineLeafletMap
             talhoes={props.talhoes}
             pluviometros={props.pluviometros}
             chuvas={props.chuvas}
+            ueis={ueis}
             onTalhaoClick={props.onTalhaoClick}
           />
         )}

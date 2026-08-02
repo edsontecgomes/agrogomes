@@ -20,6 +20,12 @@ const ServicosDashboard = lazy(() =>
   })),
 );
 
+const SoloColetaDashboard = lazy(() =>
+  import("../../modules/solo/SoloColetaDashboard").then((modulo) => ({
+    default: modulo.SoloColetaDashboard,
+  })),
+);
+
 const TalhoesDashboard = lazy(() =>
   import("../../modules/talhoes/TalhoesDashboard").then((modulo) => ({
     default: modulo.TalhoesDashboard,
@@ -80,11 +86,18 @@ const AgronomicOnboarding = lazy(() =>
   })),
 );
 
+const MapaGlobalSystemAdmin = lazy(() =>
+  import("../../modules/admin/MapaGlobalSystemAdmin").then((modulo) => ({
+    default: modulo.MapaGlobalSystemAdmin,
+  })),
+);
+
 type ModuleHubProps = {
   activeModule: string;
   farmId: string;
   usuario: Usuario;
   isAdmin: boolean;
+  isSystemAdmin: boolean;
   showOnboardingOnHome: boolean;
   onOpenModule?: (moduleId: string) => void;
 };
@@ -126,9 +139,22 @@ export function ModuleHub({
   farmId,
   usuario,
   isAdmin,
+  isSystemAdmin,
   onOpenModule = () => {},
 }: ModuleHubProps) {
   void usuario;
+
+  if (isSystemAdmin) {
+    return (
+      <Suspense fallback={<LoadingModule />}>
+        {activeModule === "mapa_global" ? (
+          <MapaGlobalSystemAdmin />
+        ) : (
+          <AcessoRestrito />
+        )}
+      </Suspense>
+    );
+  }
 
   return (
     <Suspense fallback={<LoadingModule />}>
@@ -147,6 +173,12 @@ export function ModuleHub({
       {activeModule === "chuvas" && (
         <main className="py-8">
           <ChuvaDashboard farmId={farmId} />
+        </main>
+      )}
+
+      {activeModule === "solo" && (
+        <main className="py-8">
+          <SoloColetaDashboard farmId={farmId} />
         </main>
       )}
 

@@ -22,11 +22,15 @@ import type {
   Pluviometro,
   Talhao,
 } from "../../types";
+import type { UEIEspacial } from "../../modules/motorEspacial/types";
+import { resolverPresencaOperacional } from "../../modules/motorEspacial/presencaOperacional";
+import { RAIO_COBERTURA_PLUVIOMETRO_METROS } from "../../modules/chuva/mapa/camadaCoberturaPluviometrosGoogleMaps";
 
 interface OfflineLeafletMapProps {
   talhoes?: Talhao[];
   pluviometros?: Pluviometro[];
   chuvas?: ChuvaComunitaria[];
+  ueis?: UEIEspacial[];
   onTalhaoClick?: (
     talhao: Talhao,
   ) => void;
@@ -138,6 +142,7 @@ export function OfflineLeafletMap({
   talhoes = [],
   pluviometros = [],
   chuvas = [],
+  ueis = [],
   onTalhaoClick,
 }: OfflineLeafletMapProps) {
   const [
@@ -217,7 +222,21 @@ export function OfflineLeafletMap({
     talhaoLayers,
   ]);
 
+  const presenca = useMemo(
+    () =>
+      userLocation
+        ? resolverPresencaOperacional(userLocation, talhoes, ueis)
+        : null,
+    [talhoes, ueis, userLocation],
+  );
+  const corLocalizacao = presenca?.status === "dentro"
+    ? "#facc15"
+    : presenca?.status === "gps_impreciso"
+      ? "#94a3b8"
+      : "#2563eb";
+
   return (
+    <div className="relative h-full w-full">
     <MapContainer
       center={center}
       zoom={
@@ -283,6 +302,17 @@ export function OfflineLeafletMap({
 
       {pluviometros.map(
         (pluviometro) => (
+          <Circle
+            key={`${pluviometro.id}-cobertura`}
+            center={[pluviometro.location.lat, pluviometro.location.lng]}
+            radius={RAIO_COBERTURA_PLUVIOMETRO_METROS}
+            pathOptions={{ color: "#0284c7", fillColor: "#38bdf8", fillOpacity: 0.1, weight: 1 }}
+          />
+        ),
+      )}
+
+      {pluviometros.map(
+        (pluviometro) => (
           <CircleMarker
             key={pluviometro.id}
             center={[
@@ -292,7 +322,7 @@ export function OfflineLeafletMap({
             radius={8}
             pathOptions={{
               color: "#ffffff",
-              fillColor: "#2563eb",
+              fillColor: "#0369a1",
               fillOpacity: 0.95,
               weight: 2,
             }}
@@ -348,8 +378,8 @@ export function OfflineLeafletMap({
               userLocation.accuracy
             }
             pathOptions={{
-              color: "#3b82f6",
-              fillColor: "#60a5fa",
+              color: corLocalizacao,
+              fillColor: corLocalizacao,
               fillOpacity: 0.12,
               weight: 1,
             }}
@@ -363,7 +393,7 @@ export function OfflineLeafletMap({
             radius={7}
             pathOptions={{
               color: "#ffffff",
-              fillColor: "#2563eb",
+              fillColor: corLocalizacao,
               fillOpacity: 1,
               weight: 3,
             }}
@@ -387,5 +417,9 @@ export function OfflineLeafletMap({
 
       <ZoomControl position="bottomright" />
     </MapContainer>
+    <div className="pointer-events-none absolute bottom-4 left-1/2 z-[1000] w-[min(92%,360px)] -translate-x-1/2 rounded-2xl bg-slate-950/90 px-4 py-3 text-xs font-bold text-white shadow-xl backdrop-blur">
+      {!presenca ? "Localização indisponível" : presenca.status === "gps_impreciso" ? `GPS impreciso — posição não confirmada (${Math.round(presenca.precisaoMetros)} m)` : presenca.status === "dentro" ? <>Área operacional ativa<br /><span className="text-slate-300">Talhão: {presenca.talhaoNome}</span><br /><span className="text-yellow-300">UEI: {presenca.ueiCodigo ?? "não identificada"}</span></> : <>Fora da área operacional<br /><span className="text-slate-400">Nenhuma UEI identificada</span></>}
+    </div>
+    </div>
   );
 }

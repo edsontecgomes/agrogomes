@@ -12,7 +12,8 @@
     "test:rules": "firebase emulators:exec --only firestore \"node --test tests/firestore.rules.test.mjs\"",
     "test:offline": "node --import tsx --test tests/offline-operational.test.mjs",
     "test:offline-navigation": "node --import tsx --test tests/offline-navigation.test.mjs",
-    "test:rain": "node --import tsx --test tests/offline-rain.test.mjs"
+    "test:rain": "node --import tsx --test tests/offline-rain.test.mjs",
+    "test:mapas-solo": "node --import tsx --test tests/mapas-solo.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.52.0",

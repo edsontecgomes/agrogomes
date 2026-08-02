@@ -1,4 +1,5 @@
 import { UEIEspacial } from "./types";
+import type { Talhao } from "../../types";
 
 import {
   ControleLocalizacaoUsuarioGoogleMaps,
@@ -11,6 +12,8 @@ type CamadaUEIGoogleMapsOpcoes = {
   zoomRotuloCompleto?: number;
   exibirLocalizacaoUsuario?: boolean;
   centralizarUsuarioNaPrimeiraLeitura?: boolean;
+  talhoes?: Talhao[];
+  ordemServicoAtiva?: boolean;
 };
 
 export type ControleCamadaUEIGoogleMaps = {
@@ -147,6 +150,8 @@ export function criarCamadaUEIGoogleMaps(
     exibirLocalizacaoUsuario = true,
     centralizarUsuarioNaPrimeiraLeitura =
       false,
+    talhoes = [],
+    ordemServicoAtiva = false,
   } = opcoes;
 
   const poligonos: any[] = [];
@@ -171,6 +176,9 @@ export function criarCamadaUEIGoogleMaps(
         {
           centralizarNaPrimeiraLeitura:
             centralizarUsuarioNaPrimeiraLeitura,
+          talhoes,
+          ueis,
+          ordemServicoAtiva,
         },
       );
   }
