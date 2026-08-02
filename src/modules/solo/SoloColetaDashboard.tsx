@@ -9,8 +9,8 @@ import type { UEIEspacial } from "../motorEspacial/types";
 import {
   comporAmostraUEI,
   listarColetasSolo,
+  obterOuCriarPontosPermanentes,
   registrarColetaSolo,
-  salvarPontosPermanentes,
 } from "./coletaSoloService";
 import { gerarPontosColetaUEI } from "./gerarPontosColetaUEI";
 import { MapaColetaSolo, type EstadoVisualPontoSolo } from "./MapaColetaSolo";
@@ -55,10 +55,13 @@ async function otimizarFotografia(file: File): Promise<string> {
 }
 
 export function SoloColetaDashboard({ farmId }: { farmId: string }) {
-  const { talhoes } = useTalhoes(farmId);
+  const { talhoes, loading: carregandoTalhoes } = useTalhoes(farmId);
   const [ueis, setUeis] = useState<UEIEspacial[]>([]);
   const [coletas, setColetas] = useState<RegistroColetaSolo[]>([]);
+  const [talhaoId, setTalhaoId] = useState("");
   const [ueiId, setUeiId] = useState("");
+  const [pontos, setPontos] = useState<PontoColetaSolo[]>([]);
+  const [carregandoPontos, setCarregandoPontos] = useState(false);
   const [pontoSelecionado, setPontoSelecionado] = useState<PontoColetaSolo | null>(null);
   const [posicao, setPosicao] = useState<Posicao | null>(null);
   const [profundidade, setProfundidade] = useState<ProfundidadeSolo>("0_10");
@@ -71,13 +74,19 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
-    void buscarUEIsDaFazenda(farmId).then((resultado) => {
-      setUeis(resultado);
-      setUeiId((atual) => atual || resultado[0]?.id || "");
-      const permanentes = resultado.flatMap((uei) => gerarPontosColetaUEI(uei));
-      void salvarPontosPermanentes(permanentes).catch(console.warn);
-    });
-    void listarColetasSolo(farmId).then(setColetas);
+    setUeis([]);
+    setColetas([]);
+    setTalhaoId("");
+    setUeiId("");
+    setPontos([]);
+    setPontoSelecionado(null);
+    void buscarUEIsDaFazenda(farmId)
+      .then(setUeis)
+      .catch(() => {
+        setUeis([]);
+        setMensagem("Não foi possível carregar as UEIs cadastradas da fazenda.");
+      });
+    void listarColetasSolo(farmId).then(setColetas).catch(() => setColetas([]));
   }, [farmId]);
 
   useEffect(() => {
@@ -91,31 +100,102 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
-  const ueiSelecionada = ueis.find((uei) => uei.id === ueiId) ?? null;
-  const pontos = useMemo(
-    () => (ueiSelecionada ? gerarPontosColetaUEI(ueiSelecionada) : []),
-    [ueiSelecionada],
+  useEffect(() => {
+    if (carregandoTalhoes) return;
+    if (talhoes.length === 0) {
+      setTalhaoId("");
+      return;
+    }
+    const atualExiste = talhoes.some((talhao) => talhao.id === talhaoId);
+    const atualTemUEI = ueis.some((uei) => uei.talhaoId === talhaoId);
+    const existeTalhaoComUEI = talhoes.some((talhao) =>
+      ueis.some((uei) => uei.talhaoId === talhao.id),
+    );
+    if (atualExiste && (atualTemUEI || !existeTalhaoComUEI)) return;
+    const primeiroComUEI = talhoes.find((talhao) =>
+      ueis.some((uei) => uei.talhaoId === talhao.id),
+    );
+    setTalhaoId((primeiroComUEI ?? talhoes[0]).id);
+  }, [carregandoTalhoes, talhaoId, talhoes, ueis]);
+
+  const talhaoSelecionado = useMemo(
+    () => talhoes.find((talhao) => talhao.id === talhaoId) ?? null,
+    [talhaoId, talhoes],
   );
+  const ueisDoTalhao = useMemo(
+    () => ueis.filter((uei) => uei.talhaoId === talhaoId),
+    [talhaoId, ueis],
+  );
+
+  useEffect(() => {
+    if (ueisDoTalhao.some((uei) => uei.id === ueiId)) return;
+    setUeiId(ueisDoTalhao[0]?.id ?? "");
+    setPontoSelecionado(null);
+  }, [ueiId, ueisDoTalhao]);
+
+  const ueiSelecionada = useMemo(
+    () => ueisDoTalhao.find((uei) => uei.id === ueiId) ?? null,
+    [ueiId, ueisDoTalhao],
+  );
+
+  useEffect(() => {
+    let ativo = true;
+    setPontoSelecionado(null);
+    if (!ueiSelecionada) {
+      setPontos([]);
+      setCarregandoPontos(false);
+      return () => {
+        ativo = false;
+      };
+    }
+    const candidatos = gerarPontosColetaUEI(ueiSelecionada);
+    setCarregandoPontos(true);
+    void obterOuCriarPontosPermanentes({
+      farmId,
+      ueiId: ueiSelecionada.id,
+      candidatos,
+    })
+      .then((resultado) => {
+        if (ativo) setPontos(resultado);
+      })
+      .finally(() => {
+        if (ativo) setCarregandoPontos(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [farmId, ueiSelecionada]);
+
   const concluidos = useMemo(
     () =>
       new Set(
         coletas
+          .filter((coleta) => coleta.ueiId === ueiSelecionada?.id)
           .filter((coleta) => coleta.profundidade === profundidade)
           .map((coleta) => coleta.pontoColetaId),
       ),
-    [coletas, profundidade],
+    [coletas, profundidade, ueiSelecionada?.id],
   );
   const ordenados = useMemo(
-    () =>
-      [...pontos].sort((a, b) => {
+    () => {
+      const principal = pontos.find((ponto) => ponto.principal);
+      const demais = pontos.filter((ponto) => !ponto.principal).sort((a, b) => {
         if (!posicao) return a.ordem - b.ordem;
         const da = calcularDistancia(posicao.lat, posicao.lng, a.coordenadaPlanejada.lat, a.coordenadaPlanejada.lng);
         const db = calcularDistancia(posicao.lat, posicao.lng, b.coordenadaPlanejada.lat, b.coordenadaPlanejada.lng);
         return da - db;
-      }),
+      });
+      return principal ? [principal, ...demais] : demais;
+    },
     [pontos, posicao],
   );
-  const proximo = ordenados.find((ponto) => !concluidos.has(ponto.id)) ?? null;
+  const principalPendente = pontos.find(
+    (ponto) => ponto.principal && !concluidos.has(ponto.id),
+  );
+  const proximo =
+    principalPendente ??
+    ordenados.find((ponto) => !concluidos.has(ponto.id)) ??
+    null;
   const distanciaSelecionada = pontoSelecionado && posicao
     ? calcularDistancia(posicao.lat, posicao.lng, pontoSelecionado.coordenadaPlanejada.lat, pontoSelecionado.coordenadaPlanejada.lng)
     : null;
@@ -169,6 +249,7 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
       ueiId: pontoSelecionado.ueiId,
       pontoColetaId: pontoSelecionado.id,
       pontoColetaCodigo: pontoSelecionado.codigo,
+      pontoPrincipal: pontoSelecionado.principal,
       coordenadaPlanejada: pontoSelecionado.coordenadaPlanejada,
       coordenadaReal: { lat: posicao.lat, lng: posicao.lng },
       distanciaMetros: distancia,
@@ -202,6 +283,10 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
   const coletasCompostas = pontos
     .map((ponto) => coletas.find((coleta) => coleta.pontoColetaId === ponto.id && coleta.profundidade === profundidade))
     .filter((coleta): coleta is RegistroColetaSolo => Boolean(coleta));
+  const pontoPrincipal = pontos.find((ponto) => ponto.principal) ?? null;
+  const coletaPrincipal = pontoPrincipal
+    ? coletasCompostas.find((coleta) => coleta.pontoColetaId === pontoPrincipal.id) ?? null
+    : null;
   const historicoPonto = pontoSelecionado
     ? coletas
         .filter((coleta) => coleta.pontoColetaId === pontoSelecionado.id)
@@ -213,35 +298,114 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
       <div>
         <p className="text-xs font-black uppercase tracking-[.2em] text-amber-600">Memória Agronômica</p>
         <h1 className="mt-1 text-3xl font-black text-slate-950">Núcleo de Coleta de Solos</h1>
-        <p className="mt-2 text-slate-500">Cinco pontos permanentes por UEI, rastreados por profundidade e safra.</p>
+        <p className="mt-2 text-slate-500">
+          Selecione um talhão cadastrado e uma de suas UEIs reais. O P01 central é
+          a referência principal das cinco subamostras que compõem a amostra da UEI.
+        </p>
       </div>
 
+      {!carregandoTalhoes && talhoes.length === 0 && (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6">
+          <strong className="text-amber-950">Nenhum talhão cadastrado nesta fazenda.</strong>
+          <p className="mt-2 text-sm text-amber-800">
+            Cadastre e finalize o processamento de um talhão antes de planejar a
+            coleta de solo. Este núcleo não cria uma cartografia paralela.
+          </p>
+        </section>
+      )}
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <MapaColetaSolo
-          ueis={ueiSelecionada ? [ueiSelecionada] : []}
-          talhoes={talhoes}
-          pontos={pontos}
-          estados={estados}
-          onSelecionar={selecionar}
-        />
+        {talhaoSelecionado && ueisDoTalhao.length > 0 ? (
+          <MapaColetaSolo
+            ueis={ueisDoTalhao}
+            talhoes={[talhaoSelecionado]}
+            pontos={pontos}
+            estados={estados}
+            ueiSelecionadaId={ueiSelecionada?.id ?? null}
+            onSelecionar={selecionar}
+            onSelecionarUEI={setUeiId}
+          />
+        ) : (
+          <div className="flex h-[58vh] min-h-[460px] items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-100 p-8 text-center">
+            <div>
+              <MapPin className="mx-auto h-10 w-10 text-slate-400" />
+              <strong className="mt-4 block text-slate-800">Mapa de coleta indisponível</strong>
+              <p className="mt-2 max-w-md text-sm text-slate-500">
+                Selecione um talhão cadastrado que já possua UEIs geradas para abrir
+                sua cartografia real e planejar as subamostras.
+              </p>
+            </div>
+          </div>
+        )}
         <aside className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <label className="block text-xs font-black uppercase tracking-wider text-slate-500">UEI em coleta</label>
-          <select value={ueiId} onChange={(evento) => setUeiId(evento.target.value)} className="w-full rounded-xl border border-slate-200 p-3 font-bold">
-            {ueis.map((uei) => <option key={uei.id} value={uei.id}>{uei.codigo ?? uei.nome ?? uei.id}</option>)}
+          <label className="block text-xs font-black uppercase tracking-wider text-slate-500">Talhão cadastrado</label>
+          <select
+            value={talhaoId}
+            onChange={(evento) => setTalhaoId(evento.target.value)}
+            disabled={carregandoTalhoes || talhoes.length === 0}
+            className="w-full rounded-xl border border-slate-200 p-3 font-bold disabled:bg-slate-100"
+          >
+            {talhoes.map((talhao) => (
+              <option key={talhao.id} value={talhao.id}>
+                {talhao.nome} · {Number(talhao.areaHa ?? talhao.area ?? 0).toFixed(2)} ha
+              </option>
+            ))}
           </select>
+          <label className="block text-xs font-black uppercase tracking-wider text-slate-500">UEI em coleta</label>
+          <select
+            value={ueiId}
+            onChange={(evento) => setUeiId(evento.target.value)}
+            disabled={ueisDoTalhao.length === 0}
+            className="w-full rounded-xl border border-slate-200 p-3 font-bold disabled:bg-slate-100"
+          >
+            {ueisDoTalhao.map((uei) => (
+              <option key={uei.id} value={uei.id}>
+                {uei.codigo ?? uei.nome ?? uei.id} · {uei.areaHa.toFixed(2)} ha
+              </option>
+            ))}
+          </select>
+          {talhaoSelecionado && ueisDoTalhao.length === 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              Este talhão ainda não possui UEIs processadas. Finalize a geração das
+              unidades no módulo Talhões; o núcleo de solos usará exatamente essas
+              mesmas divisões.
+            </div>
+          )}
+          {ueiSelecionada && (
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-xl bg-slate-50 p-3">
+                <span className="block text-slate-500">UEIs no talhão</span>
+                <strong className="mt-1 block text-base text-slate-900">{ueisDoTalhao.length}</strong>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <span className="block text-slate-500">Área da UEI</span>
+                <strong className="mt-1 block text-base text-slate-900">{ueiSelecionada.areaHa.toFixed(2)} ha</strong>
+              </div>
+            </div>
+          )}
           <label className="block text-xs font-black uppercase tracking-wider text-slate-500">Profundidade</label>
           <select value={profundidade} onChange={(evento) => setProfundidade(evento.target.value as ProfundidadeSolo)} className="w-full rounded-xl border border-slate-200 p-3">
             <option value="0_10">0–10 cm</option><option value="10_20">10–20 cm</option><option value="20_30">20–30 cm</option>
           </select>
           <div className="rounded-2xl bg-slate-950 p-4 text-white">
             <div className="flex items-center gap-2 text-sm font-black"><Navigation className="h-4 w-4 text-yellow-300" /> Próximo ponto</div>
-            <div className="mt-2 text-lg font-black">{proximo?.codigo ?? "Etapa concluída"}</div>
+            <div className="mt-2 text-lg font-black">
+              {carregandoPontos ? "Carregando pontos..." : proximo?.codigo ?? "Etapa concluída"}
+            </div>
+            {proximo?.principal && (
+              <div className="mt-1 text-xs font-bold text-yellow-300">Ponto central principal da UEI</div>
+            )}
             {proximo && posicao && <div className="mt-1 text-xs text-slate-300">Distância: {Math.round(calcularDistancia(posicao.lat, posicao.lng, proximo.coordenadaPlanejada.lat, proximo.coordenadaPlanejada.lng))} m</div>}
           </div>
           <div className="space-y-2">
             {ordenados.map((ponto) => (
               <button key={ponto.id} onClick={() => selecionar(ponto)} className={`flex w-full items-center justify-between rounded-xl border p-3 text-left ${pontoSelecionado?.id === ponto.id ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
-                <span><strong className="block text-sm">{ponto.codigo}</strong><span className="text-xs text-slate-500">Raio de {ponto.raioOperacionalMetros} m</span></span>
+                <span>
+                  <strong className="block text-sm">{ponto.codigo}</strong>
+                  <span className="text-xs text-slate-500">
+                    {ponto.principal ? "Ponto central principal" : "Subamostra complementar"} · raio de {ponto.raioOperacionalMetros} m
+                  </span>
+                </span>
                 {concluidos.has(ponto.id) ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <MapPin className="h-5 w-5 text-slate-400" />}
               </button>
             ))}
@@ -251,7 +415,7 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
 
       {pontoSelecionado && (
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-3"><FlaskConical className="h-6 w-6 text-amber-500" /><div><h2 className="font-black">Confirmar {pontoSelecionado.codigo}</h2><p className="text-xs text-slate-500">Distância atual: {distanciaSelecionada === null ? "—" : `${distanciaSelecionada.toFixed(1)} m`} · GPS: {posicao ? `${Math.round(posicao.accuracy)} m` : "indisponível"}</p></div></div>
+          <div className="flex items-center gap-3"><FlaskConical className="h-6 w-6 text-amber-500" /><div><h2 className="font-black">Confirmar {pontoSelecionado.codigo}</h2>{pontoSelecionado.principal && <p className="text-xs font-black uppercase tracking-wider text-amber-600">Ponto central principal da amostra composta</p>}<p className="text-xs text-slate-500">Distância atual: {distanciaSelecionada === null ? "—" : `${distanciaSelecionada.toFixed(1)} m`} · GPS: {posicao ? `${Math.round(posicao.accuracy)} m` : "indisponível"}</p></div></div>
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             <input value={numeroAmostra} onChange={(e) => setNumeroAmostra(e.target.value)} placeholder="Número da amostra" className="rounded-xl border border-slate-200 p-3" />
             <input value={tipoAnalise} onChange={(e) => setTipoAnalise(e.target.value)} placeholder="Tipo de análise" className="rounded-xl border border-slate-200 p-3" />
@@ -324,8 +488,8 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
       )}
 
       <section className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
-        <div><strong className="block text-emerald-950">Amostra composta da UEI</strong><span className="text-sm text-emerald-800">{coletasCompostas.length}/5 subamostras concluídas em {profundidade.replace("_", "–")} cm.</span></div>
-        <button disabled={coletasCompostas.length !== 5 || !auth.currentUser || !ueiSelecionada} onClick={() => ueiSelecionada && auth.currentUser && void comporAmostraUEI({ farmId, talhaoId: ueiSelecionada.talhaoId, ueiId: ueiSelecionada.id, profundidade, coletaIds: coletasCompostas.map((item) => item.id), usuarioId: auth.currentUser.uid }).then(() => setMensagem("Amostra composta criada e vinculada à UEI."))} className="rounded-xl bg-emerald-700 px-5 py-3 font-black text-white disabled:opacity-40">Compor amostra</button>
+        <div><strong className="block text-emerald-950">Amostra composta da UEI real</strong><span className="text-sm text-emerald-800">{coletasCompostas.length}/5 subamostras concluídas em {profundidade.replace("_", "–")} cm. {coletaPrincipal ? "P01 central registrado." : "P01 central ainda pendente."}</span></div>
+        <button disabled={coletasCompostas.length !== 5 || !coletaPrincipal || !pontoPrincipal || !auth.currentUser || !ueiSelecionada} onClick={() => ueiSelecionada && pontoPrincipal && coletaPrincipal && auth.currentUser && void comporAmostraUEI({ farmId, talhaoId: ueiSelecionada.talhaoId, ueiId: ueiSelecionada.id, profundidade, coletaIds: coletasCompostas.map((item) => item.id), pontoPrincipalId: pontoPrincipal.id, coletaPrincipalId: coletaPrincipal.id, usuarioId: auth.currentUser.uid }).then(() => setMensagem("Amostra composta criada e vinculada ao talhão, à UEI e ao P01 central."))} className="rounded-xl bg-emerald-700 px-5 py-3 font-black text-white disabled:opacity-40">Compor amostra</button>
       </section>
       {mensagem && <div className="fixed bottom-5 left-1/2 z-[300] -translate-x-1/2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-2xl">{mensagem}</div>}
     </div>

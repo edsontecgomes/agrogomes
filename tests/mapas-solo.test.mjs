@@ -28,6 +28,10 @@ test("gera cinco pontos permanentes e identificadores estáveis por UEI", () => 
   assert.equal(primeira.length, 5);
   assert.deepEqual(primeira, gerarPontosColetaUEI(uei));
   assert.equal(primeira[0].codigo, "PRIMAVERA-01-UEI-0027-P01");
+  assert.equal(primeira[0].principal, true);
+  assert.ok(primeira.slice(1).every((ponto) => ponto.principal === false));
+  assert.ok(primeira.every((ponto) => ponto.talhaoId === talhao.id));
+  assert.ok(primeira.every((ponto) => ponto.ueiId === uei.id));
   assert.equal(new Set(primeira.map((ponto) => ponto.id)).size, 5);
   assert.ok(primeira.every((ponto) => ponto.raioOperacionalMetros >= 2 && ponto.raioOperacionalMetros <= 5));
 });

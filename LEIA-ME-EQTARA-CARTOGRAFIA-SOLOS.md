@@ -70,12 +70,17 @@ Nesse perfil, a navegação é limitada à Visão Global. A interface consulta s
 
 ## Coleta de solos
 
-- Os pontos `P01` a `P05` são derivados de forma determinística da geometria da UEI.
+- O fluxo parte exclusivamente de `fazenda → talhão cadastrado → UEI já gerada`.
+- O módulo não cria talhões nem UEIs paralelos e não inventa divisões quando o talhão ainda não foi processado.
+- O mapa exibe o limite do talhão selecionado e todas as UEIs reais pertencentes a ele.
+- Os pontos `P01` a `P05` são derivados de forma determinística da geometria da UEI selecionada.
+- O `P01` central é a referência principal; os demais pontos são subamostras complementares.
 - Cada ponto possui microárea operacional de 4 metros e margem interna padrão de 5 metros.
+- Depois de persistidas, as coordenadas dos cinco pontos são reutilizadas e não são recalculadas a cada abertura.
 - As profundidades `0–10`, `10–20` e `20–30 cm` são registradas separadamente.
 - A fotografia é opcional e comprimida no aparelho antes da gravação.
 - Registros sem conexão entram na fila de sincronização existente.
-- Cinco subamostras concluídas liberam a amostra composta da UEI.
+- Cinco subamostras concluídas, incluindo obrigatoriamente o `P01`, liberam a amostra composta da UEI.
 
 ## Limitação conhecida
 

@@ -75,6 +75,7 @@ export function gerarPontosColetaUEI(
       ueiId: uei.id,
       ueiCodigo: codigoBase,
       ordem,
+      principal: ordem === 1,
       coordenadaPlanejada: {
         lng: escolhido.geometry.coordinates[0],
         lat: escolhido.geometry.coordinates[1],

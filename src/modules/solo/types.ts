@@ -9,6 +9,7 @@ export type PontoColetaSolo = {
   ueiId: string;
   ueiCodigo: string;
   ordem: 1 | 2 | 3 | 4 | 5;
+  principal: boolean;
   coordenadaPlanejada: { lat: number; lng: number };
   raioOperacionalMetros: number;
 };
@@ -21,6 +22,7 @@ export type RegistroColetaSolo = {
   ueiId: string;
   pontoColetaId: string;
   pontoColetaCodigo: string;
+  pontoPrincipal: boolean;
   coordenadaPlanejada: { lat: number; lng: number };
   coordenadaReal: { lat: number; lng: number };
   distanciaMetros: number;

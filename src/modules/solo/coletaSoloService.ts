@@ -20,6 +20,7 @@ import type {
 } from "./types";
 
 const CHAVE_CACHE = "eqtara:coletas-solo:v1";
+const CHAVE_PONTOS = "eqtara:pontos-coleta-solo:v2";
 
 function lerCache(): RegistroColetaSolo[] {
   try {
@@ -31,6 +32,31 @@ function lerCache(): RegistroColetaSolo[] {
 
 function salvarCache(registros: RegistroColetaSolo[]) {
   localStorage.setItem(CHAVE_CACHE, JSON.stringify(registros));
+}
+
+function lerCachePontos(): PontoColetaSolo[] {
+  try {
+    return JSON.parse(localStorage.getItem(CHAVE_PONTOS) ?? "[]") as PontoColetaSolo[];
+  } catch {
+    return [];
+  }
+}
+
+function normalizarPonto(pontoColeta: PontoColetaSolo): PontoColetaSolo {
+  return {
+    ...pontoColeta,
+    principal: pontoColeta.principal ?? pontoColeta.ordem === 1,
+  };
+}
+
+function salvarCachePontos(pontos: PontoColetaSolo[]) {
+  const unicos = new Map(
+    [...lerCachePontos(), ...pontos].map((pontoColeta) => [
+      pontoColeta.id,
+      normalizarPonto(pontoColeta),
+    ]),
+  );
+  localStorage.setItem(CHAVE_PONTOS, JSON.stringify([...unicos.values()]));
 }
 
 export async function listarColetasSolo(farmId: string) {
@@ -95,6 +121,7 @@ export async function registrarColetaSolo(registro: RegistroColetaSolo) {
 }
 
 export async function salvarPontosPermanentes(pontos: PontoColetaSolo[]) {
+  salvarCachePontos(pontos);
   if (!navigator.onLine) return;
   await Promise.all(
     pontos.map((pontoColeta) =>
@@ -107,12 +134,63 @@ export async function salvarPontosPermanentes(pontos: PontoColetaSolo[]) {
   );
 }
 
+export async function obterOuCriarPontosPermanentes(params: {
+  farmId: string;
+  ueiId: string;
+  candidatos: PontoColetaSolo[];
+}): Promise<PontoColetaSolo[]> {
+  const locais = lerCachePontos()
+    .filter((pontoColeta) => pontoColeta.farmId === params.farmId)
+    .filter((pontoColeta) => pontoColeta.ueiId === params.ueiId)
+    .map(normalizarPonto)
+    .sort((a, b) => a.ordem - b.ordem);
+
+  if (!navigator.onLine) {
+    if (locais.length === 5) return locais;
+    salvarCachePontos(params.candidatos);
+    return params.candidatos;
+  }
+
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(db, "pontos_coleta_solo"),
+        where("farmId", "==", params.farmId),
+      ),
+    );
+    const existentes = snapshot.docs
+      .map(
+        (documento) =>
+          normalizarPonto({
+            id: documento.id,
+            ...documento.data(),
+          } as PontoColetaSolo),
+      )
+      .filter((pontoColeta) => pontoColeta.ueiId === params.ueiId)
+      .sort((a, b) => a.ordem - b.ordem);
+
+    if (existentes.length === 5) {
+      salvarCachePontos(existentes);
+      return existentes;
+    }
+
+    await salvarPontosPermanentes(params.candidatos);
+    return params.candidatos;
+  } catch {
+    if (locais.length === 5) return locais;
+    salvarCachePontos(params.candidatos);
+    return params.candidatos;
+  }
+}
+
 export async function comporAmostraUEI(params: {
   farmId: string;
   talhaoId: string;
   ueiId: string;
   profundidade: string;
   coletaIds: string[];
+  pontoPrincipalId: string;
+  coletaPrincipalId: string;
   usuarioId: string;
 }) {
   const id = `${params.ueiId}__${params.profundidade}__${new Date()

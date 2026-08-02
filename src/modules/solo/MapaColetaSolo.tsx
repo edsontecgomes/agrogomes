@@ -31,13 +31,17 @@ export function MapaColetaSolo({
   talhoes,
   pontos,
   estados,
+  ueiSelecionadaId,
   onSelecionar,
+  onSelecionarUEI,
 }: {
   ueis: UEIEspacial[];
   talhoes: Talhao[];
   pontos: PontoColetaSolo[];
   estados: Record<string, EstadoVisualPontoSolo>;
+  ueiSelecionadaId: string | null;
   onSelecionar: (ponto: PontoColetaSolo) => void;
+  onSelecionarUEI: (ueiId: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -60,6 +64,24 @@ export function MapaColetaSolo({
         talhoes,
         centralizarUsuarioNaPrimeiraLeitura: true,
       });
+      ueis.forEach((uei) => {
+        const selecionada = uei.id === ueiSelecionadaId;
+        const seletor = new google.maps.Polygon({
+          map: mapa,
+          paths: uei.geometria,
+          clickable: true,
+          fillColor: selecionada ? "#f59e0b" : "#0f172a",
+          fillOpacity: selecionada ? 0.12 : 0.01,
+          strokeColor: selecionada ? "#fbbf24" : "#e2e8f0",
+          strokeOpacity: selecionada ? 1 : 0.28,
+          strokeWeight: selecionada ? 3 : 1,
+          zIndex: selecionada ? 18 : 10,
+        });
+        elementos.push(seletor);
+        listeners.push(
+          seletor.addListener("click", () => onSelecionarUEI(uei.id)),
+        );
+      });
       pontos.forEach((pontoColeta) => {
         const estado = estados[pontoColeta.id] ?? "nao_visitado";
         const cor = CORES[estado];
@@ -77,22 +99,30 @@ export function MapaColetaSolo({
         const marcador = new google.maps.Marker({
           map: mapa,
           position: pontoColeta.coordenadaPlanejada,
-          title: pontoColeta.codigo,
+          title: pontoColeta.principal
+            ? `${pontoColeta.codigo} · ponto central principal`
+            : pontoColeta.codigo,
           label: {
-            text: `P${pontoColeta.ordem}`,
+            text: pontoColeta.principal ? "P1" : `P${pontoColeta.ordem}`,
             color: estado === "nao_visitado" ? "#0f172a" : "#ffffff",
             fontSize: "10px",
             fontWeight: "800",
           },
           icon: {
             path: google.maps.SymbolPath.CIRCLE,
-            scale: estado === "dentro_raio" ? 10 : 8,
+            scale: pontoColeta.principal
+              ? estado === "dentro_raio"
+                ? 13
+                : 11
+              : estado === "dentro_raio"
+                ? 10
+                : 8,
             fillColor: cor,
             fillOpacity: 1,
-            strokeColor: "#0f172a",
-            strokeWeight: 1.5,
+            strokeColor: pontoColeta.principal ? "#f59e0b" : "#0f172a",
+            strokeWeight: pontoColeta.principal ? 3 : 1.5,
           },
-          zIndex: 30,
+          zIndex: pontoColeta.principal ? 40 : 30,
         });
         elementos.push(microarea, marcador);
         listeners.push(
@@ -106,7 +136,15 @@ export function MapaColetaSolo({
       elementos.forEach((elemento) => elemento.setMap(null));
       listeners.forEach((listener) => listener.remove());
     };
-  }, [estados, onSelecionar, pontos, talhoes, ueis]);
+  }, [
+    estados,
+    onSelecionar,
+    onSelecionarUEI,
+    pontos,
+    talhoes,
+    ueiSelecionadaId,
+    ueis,
+  ]);
 
   return <div ref={ref} className="h-[58vh] min-h-[460px] w-full rounded-3xl bg-slate-900" />;
 }
