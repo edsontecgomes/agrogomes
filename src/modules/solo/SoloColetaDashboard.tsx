@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, FlaskConical, MapPin, Navigation } from "lucide-react";
+import {
+  CheckCircle2,
+  Download,
+  FlaskConical,
+  MapPin,
+  Navigation,
+} from "lucide-react";
 
 import { useTalhoes } from "../../hooks/useTalhoes";
 import { auth } from "../../services/firebase";
@@ -14,6 +20,7 @@ import {
 } from "./coletaSoloService";
 import { gerarPontosColetaUEI } from "./gerarPontosColetaUEI";
 import { MapaColetaSolo, type EstadoVisualPontoSolo } from "./MapaColetaSolo";
+import { baixarRotaColetaSoloGPX } from "./exportarRotaColetaGPX";
 import type {
   PontoColetaSolo,
   ProfundidadeSolo,
@@ -123,7 +130,17 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
     [talhaoId, talhoes],
   );
   const ueisDoTalhao = useMemo(
-    () => ueis.filter((uei) => uei.talhaoId === talhaoId),
+    () =>
+      ueis
+        .filter((uei) => uei.talhaoId === talhaoId)
+        .sort((a, b) => {
+          const numeroA = a.numero ?? Number.MAX_SAFE_INTEGER;
+          const numeroB = b.numero ?? Number.MAX_SAFE_INTEGER;
+          if (numeroA !== numeroB) return numeroA - numeroB;
+          return (a.codigo ?? a.nome ?? a.id).localeCompare(
+            b.codigo ?? b.nome ?? b.id,
+          );
+        }),
     [talhaoId, ueis],
   );
 
@@ -141,22 +158,40 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
   useEffect(() => {
     let ativo = true;
     setPontoSelecionado(null);
-    if (!ueiSelecionada) {
+    if (ueisDoTalhao.length === 0) {
       setPontos([]);
       setCarregandoPontos(false);
       return () => {
         ativo = false;
       };
     }
-    const candidatos = gerarPontosColetaUEI(ueiSelecionada);
     setCarregandoPontos(true);
-    void obterOuCriarPontosPermanentes({
-      farmId,
-      ueiId: ueiSelecionada.id,
-      candidatos,
-    })
-      .then((resultado) => {
-        if (ativo) setPontos(resultado);
+    void Promise.all(
+      ueisDoTalhao.map(async (uei, indiceUEI) => {
+        const candidatos = gerarPontosColetaUEI(uei);
+        const permanentes = await obterOuCriarPontosPermanentes({
+          farmId,
+          ueiId: uei.id,
+          candidatos,
+        });
+        return permanentes
+          .sort((a, b) => a.ordem - b.ordem)
+          .map((ponto, indicePonto) => ({
+            ...ponto,
+            ordemRotaTalhao: indiceUEI * 5 + indicePonto + 1,
+          }));
+      }),
+    )
+      .then((grupos) => {
+        if (ativo) setPontos(grupos.flat());
+      })
+      .catch(() => {
+        if (ativo) {
+          setPontos([]);
+          setMensagem(
+            "Não foi possível preparar todos os pontos da rota de coleta.",
+          );
+        }
       })
       .finally(() => {
         if (ativo) setCarregandoPontos(false);
@@ -164,7 +199,12 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
     return () => {
       ativo = false;
     };
-  }, [farmId, ueiSelecionada]);
+  }, [farmId, ueisDoTalhao]);
+
+  const pontosDaUeiSelecionada = useMemo(
+    () => pontos.filter((ponto) => ponto.ueiId === ueiSelecionada?.id),
+    [pontos, ueiSelecionada?.id],
+  );
 
   const concluidos = useMemo(
     () =>
@@ -178,8 +218,8 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
   );
   const ordenados = useMemo(
     () => {
-      const principal = pontos.find((ponto) => ponto.principal);
-      const demais = pontos.filter((ponto) => !ponto.principal).sort((a, b) => {
+      const principal = pontosDaUeiSelecionada.find((ponto) => ponto.principal);
+      const demais = pontosDaUeiSelecionada.filter((ponto) => !ponto.principal).sort((a, b) => {
         if (!posicao) return a.ordem - b.ordem;
         const da = calcularDistancia(posicao.lat, posicao.lng, a.coordenadaPlanejada.lat, a.coordenadaPlanejada.lng);
         const db = calcularDistancia(posicao.lat, posicao.lng, b.coordenadaPlanejada.lat, b.coordenadaPlanejada.lng);
@@ -187,9 +227,9 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
       });
       return principal ? [principal, ...demais] : demais;
     },
-    [pontos, posicao],
+    [pontosDaUeiSelecionada, posicao],
   );
-  const principalPendente = pontos.find(
+  const principalPendente = pontosDaUeiSelecionada.find(
     (ponto) => ponto.principal && !concluidos.has(ponto.id),
   );
   const proximo =
@@ -201,8 +241,13 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
     : null;
   const estados = useMemo(() => {
     const resultado: Record<string, EstadoVisualPontoSolo> = {};
+    const concluidosNoTalhao = new Set(
+      coletas
+        .filter((coleta) => coleta.profundidade === profundidade)
+        .map((coleta) => coleta.pontoColetaId),
+    );
     pontos.forEach((ponto) => {
-      if (concluidos.has(ponto.id)) resultado[ponto.id] = "concluido";
+      if (concluidosNoTalhao.has(ponto.id)) resultado[ponto.id] = "concluido";
       else if (!posicao || posicao.accuracy > GPS_PRECISAO_MAXIMA_METROS) resultado[ponto.id] = "gps_impreciso";
       else {
         const distancia = calcularDistancia(posicao.lat, posicao.lng, ponto.coordenadaPlanejada.lat, ponto.coordenadaPlanejada.lng);
@@ -214,9 +259,10 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
       }
     });
     return resultado;
-  }, [concluidos, pontos, posicao, proximo]);
+  }, [coletas, pontos, posicao, profundidade, proximo]);
 
   const selecionar = useCallback((ponto: PontoColetaSolo) => {
+    setUeiId(ponto.ueiId);
     setPontoSelecionado(ponto);
     setNumeroAmostra((atual) => atual || `${ponto.codigo}-${profundidade}`);
   }, [profundidade]);
@@ -280,10 +326,11 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
     }
   };
 
-  const coletasCompostas = pontos
+  const coletasCompostas = pontosDaUeiSelecionada
     .map((ponto) => coletas.find((coleta) => coleta.pontoColetaId === ponto.id && coleta.profundidade === profundidade))
     .filter((coleta): coleta is RegistroColetaSolo => Boolean(coleta));
-  const pontoPrincipal = pontos.find((ponto) => ponto.principal) ?? null;
+  const pontoPrincipal =
+    pontosDaUeiSelecionada.find((ponto) => ponto.principal) ?? null;
   const coletaPrincipal = pontoPrincipal
     ? coletasCompostas.find((coleta) => coleta.pontoColetaId === pontoPrincipal.id) ?? null
     : null;
@@ -322,6 +369,7 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
             pontos={pontos}
             estados={estados}
             ueiSelecionadaId={ueiSelecionada?.id ?? null}
+            posicaoUsuario={posicao}
             onSelecionar={selecionar}
             onSelecionarUEI={setUeiId}
           />
@@ -351,6 +399,32 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            disabled={carregandoPontos || pontos.length === 0 || !talhaoSelecionado}
+            onClick={() => {
+              if (!talhaoSelecionado) return;
+              baixarRotaColetaSoloGPX({
+                nomeTalhao: talhaoSelecionado.nome,
+                pontos,
+              });
+              setMensagem(
+                `Rota GPX exportada com ${pontos.length} pontos para uso em GPS de mão.`,
+              );
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 font-black text-slate-950 shadow-sm transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Download className="h-5 w-5" />
+            Exportar rota GPX
+          </button>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900">
+            <strong className="block text-sm">Rota preparada para uso offline</strong>
+            <span className="mt-1 block">
+              {carregandoPontos
+                ? "Carregando as UEIs e os pontos deste talhão..."
+                : `${ueisDoTalhao.length} UEIs e ${pontos.length} pontos disponíveis neste aparelho.`}
+            </span>
+          </div>
           <label className="block text-xs font-black uppercase tracking-wider text-slate-500">UEI em coleta</label>
           <select
             value={ueiId}
@@ -401,7 +475,9 @@ export function SoloColetaDashboard({ farmId }: { farmId: string }) {
             {ordenados.map((ponto) => (
               <button key={ponto.id} onClick={() => selecionar(ponto)} className={`flex w-full items-center justify-between rounded-xl border p-3 text-left ${pontoSelecionado?.id === ponto.id ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
                 <span>
-                  <strong className="block text-sm">{ponto.codigo}</strong>
+                  <strong className="block text-sm">
+                    P{String(ponto.ordemRotaTalhao ?? ponto.ordem).padStart(2, "0")} · {ponto.codigo}
+                  </strong>
                   <span className="text-xs text-slate-500">
                     {ponto.principal ? "Ponto central principal" : "Subamostra complementar"} · raio de {ponto.raioOperacionalMetros} m
                   </span>

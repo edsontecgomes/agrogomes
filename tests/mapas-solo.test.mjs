@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { gerarPontosColetaUEI } from "../src/modules/solo/gerarPontosColetaUEI.ts";
+import { criarRotaColetaSoloGPX } from "../src/modules/solo/exportarRotaColetaGPX.ts";
 import { resolverPresencaOperacional } from "../src/modules/motorEspacial/presencaOperacional.ts";
 
 const talhao = {
@@ -34,4 +35,30 @@ test("gera cinco pontos permanentes e identificadores estáveis por UEI", () => 
   assert.ok(primeira.every((ponto) => ponto.ueiId === uei.id));
   assert.equal(new Set(primeira.map((ponto) => ponto.id)).size, 5);
   assert.ok(primeira.every((ponto) => ponto.raioOperacionalMetros >= 2 && ponto.raioOperacionalMetros <= 5));
+});
+
+test("exporta rota GPX completa com waypoints contínuos", () => {
+  const primeiraUEI = gerarPontosColetaUEI(uei).map((ponto, indice) => ({
+    ...ponto,
+    ordemRotaTalhao: indice + 1,
+  }));
+  const segundaUEI = gerarPontosColetaUEI({
+    ...uei,
+    id: "uei-28",
+    codigo: "PRIMAVERA-01-UEI-0028",
+  }).map((ponto, indice) => ({
+    ...ponto,
+    ordemRotaTalhao: indice + 6,
+  }));
+  const gpx = criarRotaColetaSoloGPX({
+    nomeFazenda: "Primavera",
+    nomeTalhao: "Talhão 01",
+    pontos: [...primeiraUEI, ...segundaUEI],
+  });
+
+  assert.match(gpx, /<gpx version="1.1"/);
+  assert.match(gpx, /<name>P01<\/name>/);
+  assert.match(gpx, /<name>P10<\/name>/);
+  assert.equal((gpx.match(/<wpt /g) ?? []).length, 10);
+  assert.equal((gpx.match(/<rtept /g) ?? []).length, 10);
 });

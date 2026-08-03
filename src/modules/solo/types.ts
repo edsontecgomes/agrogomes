@@ -9,6 +9,8 @@ export type PontoColetaSolo = {
   ueiId: string;
   ueiCodigo: string;
   ordem: 1 | 2 | 3 | 4 | 5;
+  /** Posição contínua do waypoint dentro da rota completa do talhão. */
+  ordemRotaTalhao?: number;
   principal: boolean;
   coordenadaPlanejada: { lat: number; lng: number };
   raioOperacionalMetros: number;
